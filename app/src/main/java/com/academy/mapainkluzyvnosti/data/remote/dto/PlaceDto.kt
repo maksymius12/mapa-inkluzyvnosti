@@ -21,7 +21,8 @@ data class PlaceReadDto(
     val source: String,
     @SerialName("verified_note") val verifiedNote: String,
     val rating: Double? = null,
-    @SerialName("review_count") val reviewCount: Int = 0
+    @SerialName("review_count") val reviewCount: Int = 0,
+    @SerialName("has_accessible_parking") val hasAccessibleParking: Boolean = false
 )
 
 /**

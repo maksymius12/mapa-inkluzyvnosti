@@ -8,7 +8,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -16,13 +20,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -37,6 +39,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -48,6 +51,9 @@ import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialException
 import com.academy.mapainkluzyvnosti.BuildConfig
 import com.academy.mapainkluzyvnosti.data.model.UserAgeGroup
+import com.academy.mapainkluzyvnosti.ui.components.PrimaryButton
+import com.academy.mapainkluzyvnosti.ui.components.SecondaryButton
+import com.academy.mapainkluzyvnosti.ui.screens.welcome.AppLogo
 import com.academy.mapainkluzyvnosti.data.model.UserPurposeRole
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
@@ -96,26 +102,42 @@ fun LoginScreen(onLoggedIn: () -> Unit, viewModel: LoginViewModel = koinViewMode
         }
     }
 
+    val segmentedColors = SegmentedButtonDefaults.colors(
+        activeContainerColor = MaterialTheme.colorScheme.primary,
+        activeContentColor = androidx.compose.ui.graphics.Color.White,
+        activeBorderColor = MaterialTheme.colorScheme.primary,
+        inactiveContainerColor = MaterialTheme.colorScheme.surface,
+        inactiveContentColor = MaterialTheme.colorScheme.onSurface,
+        inactiveBorderColor = MaterialTheme.colorScheme.outlineVariant
+    )
+
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .statusBarsPadding()
+            .navigationBarsPadding()
+            .imePadding()
             .verticalScroll(rememberScrollState())
             .padding(24.dp),
         verticalArrangement = Arrangement.Center
     ) {
+        Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            AppLogo(width = 72.dp)
+        }
         Text(
             text = "Мапа Інклюзивності",
-            style = MaterialTheme.typography.headlineLarge,
+            style = MaterialTheme.typography.headlineMedium,
             textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth().padding(top = 16.dp)
         )
         Text(
-            text = "Карта доступності Шевченківського району Києва",
-            style = MaterialTheme.typography.bodyMedium,
+            text = "Шевченківський район",
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.primary,
             textAlign = TextAlign.Center,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 8.dp, bottom = 32.dp)
+                .padding(top = 4.dp, bottom = 28.dp)
         )
 
         Text(text = "Мета використання", style = MaterialTheme.typography.titleSmall)
@@ -123,12 +145,14 @@ fun LoginScreen(onLoggedIn: () -> Unit, viewModel: LoginViewModel = koinViewMode
             SegmentedButton(
                 selected = uiState.purposeRole == UserPurposeRole.RESIDENT,
                 onClick = { viewModel.setPurposeRole(UserPurposeRole.RESIDENT) },
-                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
+                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                colors = segmentedColors
             ) { Text("Мешканець") }
             SegmentedButton(
                 selected = uiState.purposeRole == UserPurposeRole.VOLUNTEER,
                 onClick = { viewModel.setPurposeRole(UserPurposeRole.VOLUNTEER) },
-                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
+                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                colors = segmentedColors
             ) { Text("Волонтер") }
         }
 
@@ -137,12 +161,14 @@ fun LoginScreen(onLoggedIn: () -> Unit, viewModel: LoginViewModel = koinViewMode
             SegmentedButton(
                 selected = uiState.ageGroup == UserAgeGroup.STUDENT,
                 onClick = { viewModel.setAgeGroup(UserAgeGroup.STUDENT) },
-                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
+                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                colors = segmentedColors
             ) { Text("Учень") }
             SegmentedButton(
                 selected = uiState.ageGroup == UserAgeGroup.ADULT,
                 onClick = { viewModel.setAgeGroup(UserAgeGroup.ADULT) },
-                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
+                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                colors = segmentedColors
             ) { Text("Дорослий") }
         }
 
@@ -154,6 +180,7 @@ fun LoginScreen(onLoggedIn: () -> Unit, viewModel: LoginViewModel = koinViewMode
             isError = uiState.emailError != null,
             supportingText = uiState.emailError?.let { { Text(it) } },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+            shape = RoundedCornerShape(14.dp),
             modifier = Modifier.fillMaxWidth()
         )
 
@@ -174,6 +201,7 @@ fun LoginScreen(onLoggedIn: () -> Unit, viewModel: LoginViewModel = koinViewMode
                     )
                 }
             },
+            shape = RoundedCornerShape(14.dp),
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
         )
 
@@ -186,13 +214,12 @@ fun LoginScreen(onLoggedIn: () -> Unit, viewModel: LoginViewModel = koinViewMode
             }
         }
 
-        Button(
+        PrimaryButton(
+            text = uiState.formTitle,
             onClick = viewModel::submitEmailForm,
             enabled = !uiState.isLoading,
-            modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
-        ) {
-            Text(uiState.formTitle)
-        }
+            modifier = Modifier.padding(top = 8.dp)
+        )
 
         TextButton(
             onClick = {
@@ -218,22 +245,20 @@ fun LoginScreen(onLoggedIn: () -> Unit, viewModel: LoginViewModel = koinViewMode
             HorizontalDivider(modifier = Modifier.weight(1f))
         }
 
-        Button(
+        SecondaryButton(
+            text = "Увійти за допомогою Google",
             onClick = ::launchGoogleSignIn,
-            enabled = !uiState.isLoading,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Увійти за допомогою Google")
-        }
+            enabled = !uiState.isLoading
+        )
 
-        OutlinedButton(
+        TextButton(
             onClick = { viewModel.continueAsGuest() },
             enabled = !uiState.isLoading,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 12.dp)
+                .padding(top = 8.dp)
         ) {
-            Text("Продовжити як гість")
+            Text("Продовжити як гість", fontWeight = FontWeight.SemiBold)
         }
 
         if (uiState.isLoading) {

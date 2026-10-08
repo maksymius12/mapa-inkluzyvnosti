@@ -2,96 +2,105 @@ package com.academy.mapainkluzyvnosti.ui.screens.filters
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.academy.mapainkluzyvnosti.data.model.AccessStatus
-import com.academy.mapainkluzyvnosti.data.model.PlaceCategory
-import com.academy.mapainkluzyvnosti.ui.components.CategoryChip
-import com.academy.mapainkluzyvnosti.ui.components.color
-import com.academy.mapainkluzyvnosti.ui.components.label
+import com.academy.mapainkluzyvnosti.data.model.AccessibilityType
+import com.academy.mapainkluzyvnosti.ui.components.AccessibilityTypeBadge
+import com.academy.mapainkluzyvnosti.ui.components.CategoryGroup
+import com.academy.mapainkluzyvnosti.ui.components.IconBadge
+import com.academy.mapainkluzyvnosti.ui.components.MapaSwitch
+import com.academy.mapainkluzyvnosti.ui.components.PrimaryButton
+import com.academy.mapainkluzyvnosti.ui.components.ScreenHeader
+import com.academy.mapainkluzyvnosti.ui.components.visual
 import org.koin.compose.viewmodel.koinViewModel
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+/** Екран 3: фільтри. Типи доступності та категорії місць; зміни одразу діють на мапу. */
 @Composable
 fun FiltersScreen(onBack: () -> Unit, viewModel: FiltersViewModel = koinViewModel()) {
     val selection by viewModel.selection.collectAsState()
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Фільтри") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
-                    }
-                },
-                actions = {
-                    TextButton(onClick = viewModel::reset) { Text("Скинути") }
-                }
-            )
-        }
-    ) { innerPadding ->
+    Column(modifier = Modifier.fillMaxSize()) {
+        ScreenHeader(title = "Фільтри", onBack = onBack, onClose = onBack)
+
         Column(
             modifier = Modifier
-                .padding(innerPadding)
-                .fillMaxSize()
+                .weight(1f)
                 .verticalScroll(rememberScrollState())
-                .padding(16.dp)
+                .padding(horizontal = 16.dp)
         ) {
-            Text(text = "Категорії", style = MaterialTheme.typography.titleMedium)
-            FlowRow(
-                modifier = Modifier.padding(top = 12.dp, bottom = 24.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                PlaceCategory.entries.forEach { category ->
-                    CategoryChip(
-                        category = category,
-                        selected = category in selection.categories,
-                        onClick = { viewModel.toggleCategory(category) }
-                    )
-                }
+            SectionTitle("Типи доступності")
+            AccessibilityType.entries.forEach { type ->
+                FilterRow(
+                    title = type.visual.label,
+                    checked = type in selection.types,
+                    onCheckedChange = { viewModel.toggleType(type) },
+                    badge = { AccessibilityTypeBadge(type = type, size = 36.dp, shape = RoundedCornerShape(10.dp)) }
+                )
             }
 
-            Text(text = "Статус доступності", style = MaterialTheme.typography.titleMedium)
-            FlowRow(
-                modifier = Modifier.padding(top = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                AccessStatus.entries.forEach { status ->
-                    val selected = status in selection.statuses
-                    FilterChip(
-                        selected = selected,
-                        onClick = { viewModel.toggleStatus(status) },
-                        label = { Text(status.label()) },
-                        colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = status.color().copy(alpha = 0.18f),
-                            selectedLabelColor = status.color()
-                        )
-                    )
-                }
+            SectionTitle("Категорії місць", modifier = Modifier.padding(top = 20.dp))
+            CategoryGroup.entries.forEach { group ->
+                val visual = group.visual
+                FilterRow(
+                    title = group.label,
+                    checked = selection.isGroupSelected(group),
+                    onCheckedChange = { viewModel.toggleCategoryGroup(group) },
+                    badge = { IconBadge(color = visual.color, icon = visual.icon, size = 36.dp, shape = RoundedCornerShape(10.dp)) }
+                )
             }
         }
+
+        Column(
+            modifier = Modifier
+                .navigationBarsPadding()
+                .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 12.dp)
+        ) {
+            PrimaryButton(text = "Застосувати", onClick = onBack)
+            TextButton(onClick = viewModel::reset, modifier = Modifier.align(Alignment.CenterHorizontally)) {
+                Text("Скинути фільтри", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+}
+
+@Composable
+private fun SectionTitle(title: String, modifier: Modifier = Modifier) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.titleSmall,
+        modifier = modifier.padding(top = 8.dp, bottom = 8.dp)
+    )
+}
+
+@Composable
+private fun FilterRow(
+    title: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    badge: @Composable () -> Unit
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 7.dp)
+    ) {
+        badge()
+        Text(text = title, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+        MapaSwitch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }

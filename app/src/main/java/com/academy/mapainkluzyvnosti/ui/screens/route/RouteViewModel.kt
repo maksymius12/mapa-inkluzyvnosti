@@ -17,7 +17,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-private const val CURRENT_LOCATION_LABEL = "Моє місцезнаходження"
+private const val CURRENT_LOCATION_LABEL = "Моє місце"
 
 data class RouteUiState(
     val fromQuery: String = "",

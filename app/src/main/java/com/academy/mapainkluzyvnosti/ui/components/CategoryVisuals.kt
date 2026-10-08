@@ -23,12 +23,27 @@ val PlaceCategory.visual: CategoryVisual
         PlaceCategory.HEALTH -> CategoryVisual(Color(0xFFE8547A), Icons.Outlined.LocalHospital, "Медицина")
         PlaceCategory.CULTURE -> CategoryVisual(Color(0xFF9B5DE5), Icons.Outlined.Museum, "Культура")
         PlaceCategory.SPORT -> CategoryVisual(Color(0xFF2FA37A), Icons.Outlined.SportsSoccer, "Спорт")
-        PlaceCategory.CAFE -> CategoryVisual(Color(0xFFE08A3A), Icons.Outlined.LocalCafe, "Кафе")
-        PlaceCategory.SERVICES -> CategoryVisual(Color(0xFF4AA3C4), Icons.Outlined.Handyman, "Послуги")
+        PlaceCategory.CAFE -> CategoryVisual(Color(0xFFE08A3A), Icons.Outlined.LocalCafe, "Кафе та ресторани")
+        PlaceCategory.SERVICES -> CategoryVisual(Color(0xFF4AA3C4), Icons.Outlined.Handyman, "Сервіси")
         PlaceCategory.ADMIN -> CategoryVisual(Color(0xFF6B7280), Icons.Outlined.AccountBalance, "Адміністрація")
         PlaceCategory.SHOP -> CategoryVisual(Color(0xFFD6558C), Icons.Outlined.Storefront, "Магазин")
         PlaceCategory.TRANSIT -> CategoryVisual(Color(0xFFC9A227), Icons.Outlined.DirectionsTransit, "Транспорт")
     }
+
+/**
+ * Категорії у фільтрах — шість груп, як на макеті. Адміністрація, магазини й транспорт
+ * об'єднані з «Сервісами», щоб кожне місце належало до якоїсь групи фільтра.
+ */
+enum class CategoryGroup(val label: String, val categories: Set<PlaceCategory>) {
+    EDUCATION("Освіта", setOf(PlaceCategory.EDUCATION)),
+    HEALTH("Медицина", setOf(PlaceCategory.HEALTH)),
+    CULTURE("Культура", setOf(PlaceCategory.CULTURE)),
+    SPORT("Спорт", setOf(PlaceCategory.SPORT)),
+    FOOD("Кафе та ресторани", setOf(PlaceCategory.CAFE)),
+    SERVICES("Сервіси", setOf(PlaceCategory.SERVICES, PlaceCategory.ADMIN, PlaceCategory.SHOP, PlaceCategory.TRANSIT));
+
+    val visual: CategoryVisual get() = categories.first().visual
+}
 
 fun AccessStatus.color(): Color = when (this) {
     AccessStatus.ACCESSIBLE -> com.academy.mapainkluzyvnosti.ui.theme.StatusAccessible

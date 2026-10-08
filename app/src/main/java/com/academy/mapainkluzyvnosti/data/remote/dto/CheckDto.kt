@@ -16,6 +16,7 @@ data class CheckDto(
     val toilet: Boolean,
     val tactile: Boolean,
     @SerialName("staff_assistance") val staffAssistance: Boolean,
+    @SerialName("accessible_parking") val accessibleParking: Boolean? = null,
     val comment: String? = null,
     @SerialName("created_at") val createdAt: String? = null
 )
@@ -27,7 +28,8 @@ fun CheckDto.toDomainCheckResult() = CheckResult(
     elevator = elevator,
     toilet = toilet,
     tactile = tactile,
-    staffAssistance = staffAssistance
+    staffAssistance = staffAssistance,
+    accessibleParking = accessibleParking == true
 )
 
 fun CheckResult.toDto(placeId: String, userId: String, comment: String? = null) = CheckDto(
@@ -40,5 +42,6 @@ fun CheckResult.toDto(placeId: String, userId: String, comment: String? = null) 
     toilet = toilet,
     tactile = tactile,
     staffAssistance = staffAssistance,
+    accessibleParking = accessibleParking,
     comment = comment
 )

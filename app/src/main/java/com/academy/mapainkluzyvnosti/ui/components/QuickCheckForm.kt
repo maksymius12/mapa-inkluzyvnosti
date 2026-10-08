@@ -22,6 +22,7 @@ data class QuickCheckState(
     val toilet: Boolean = false,
     val tactile: Boolean = false,
     val staffAssistance: Boolean = false,
+    val accessibleParking: Boolean = false,
     val comment: String = ""
 ) {
     fun toCheckResult() = CheckResult(
@@ -31,7 +32,8 @@ data class QuickCheckState(
         elevator = elevator,
         toilet = toilet,
         tactile = tactile,
-        staffAssistance = staffAssistance
+        staffAssistance = staffAssistance,
+        accessibleParking = accessibleParking
     )
 }
 
@@ -52,9 +54,31 @@ fun QuickCheckForm(
         CriterionRow("Тактильні позначки", state.tactile) { onStateChange(state.copy(tactile = it)) },
         CriterionRow("Допомога персоналу", state.staffAssistance) { onStateChange(state.copy(staffAssistance = it)) }
     )
+    // Додатковий атрибут: на статус за 7 критеріями не впливає.
+    val extraCriteria = listOf(
+        CriterionRow("Паркування для МГН", state.accessibleParking) { onStateChange(state.copy(accessibleParking = it)) }
+    )
 
     Column(modifier = modifier.fillMaxWidth()) {
         criteria.forEach { criterion ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(text = criterion.label, style = MaterialTheme.typography.bodyLarge)
+                Switch(checked = criterion.value, onCheckedChange = criterion.onChange)
+            }
+        }
+        Text(
+            text = "Додатково (не впливає на статус)",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 16.dp)
+        )
+        extraCriteria.forEach { criterion ->
             Row(
                 modifier = Modifier
                     .fillMaxWidth()

@@ -2,12 +2,17 @@ package com.academy.mapainkluzyvnosti.ui.screens.map
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.academy.mapainkluzyvnosti.data.model.AccessibilityType
+import com.academy.mapainkluzyvnosti.data.model.GeoPoint
 import com.academy.mapainkluzyvnosti.data.model.Place
 import com.academy.mapainkluzyvnosti.data.model.SosRequest
 import com.academy.mapainkluzyvnosti.data.model.UserPurposeRole
+import com.academy.mapainkluzyvnosti.data.remote.NominatimApi
 import com.academy.mapainkluzyvnosti.data.repository.PlaceRepository
 import com.academy.mapainkluzyvnosti.data.repository.SosRepository
+import com.academy.mapainkluzyvnosti.domain.usecase.parseOuterRings
 import com.academy.mapainkluzyvnosti.ui.state.CurrentUserStore
+import com.academy.mapainkluzyvnosti.ui.state.FilterSelection
 import com.academy.mapainkluzyvnosti.ui.state.MapFilterStore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -23,6 +28,7 @@ import kotlinx.coroutines.launch
 
 data class MapUiState(
     val places: List<Place> = emptyList(),
+    val activeTypes: Set<AccessibilityType> = AccessibilityType.entries.toSet(),
     val selectedPlaceId: String? = null,
     val sosRequests: List<SosRequest> = emptyList(),
     val selectedSosId: String? = null,
@@ -37,25 +43,46 @@ class MapViewModel(
     private val placeRepository: PlaceRepository,
     private val sosRepository: SosRepository,
     private val currentUserStore: CurrentUserStore,
-    private val filterStore: MapFilterStore
+    private val filterStore: MapFilterStore,
+    private val nominatimApi: NominatimApi
 ) : ViewModel() {
 
     private val allPlaces = MutableStateFlow<List<Place>>(emptyList())
     private val _uiState = MutableStateFlow(MapUiState())
     val uiState: StateFlow<MapUiState> = _uiState.asStateFlow()
 
+    val filterSelection: StateFlow<FilterSelection> = filterStore.selection
+
     val isVolunteer: StateFlow<Boolean> = currentUserStore.user
         .map { it?.purposeRole == UserPurposeRole.VOLUNTEER }
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
+    // Межі району — для затемнення мапи поза ним і обмеження камери.
+    private val _districtBoundary = MutableStateFlow<List<List<GeoPoint>>>(emptyList())
+    val districtBoundary: StateFlow<List<List<GeoPoint>>> = _districtBoundary.asStateFlow()
+
     init {
         combine(allPlaces, filterStore.selection) { places, selection ->
-            places.filter { it.category in selection.categories && it.status in selection.statuses }
-        }.onEach { filtered ->
-            _uiState.update { it.copy(places = filtered) }
+            places.filter { selection.matches(it) } to selection.types
+        }.onEach { (filtered, types) ->
+            _uiState.update { state ->
+                // Вибране місце, яке фільтр сховав, більше не показуємо в нижній панелі.
+                val keepSelection = state.selectedPlaceId?.takeIf { id -> filtered.any { it.id == id } }
+                state.copy(places = filtered, activeTypes = types, selectedPlaceId = keepSelection)
+            }
         }.launchIn(viewModelScope)
 
+        loadDistrictBoundary()
         refresh()
+    }
+
+    private fun loadDistrictBoundary() {
+        viewModelScope.launch {
+            runCatching {
+                val district = nominatimApi.searchDistrictPolygon("Шевченківський район, Київ, Україна")
+                district?.geojson?.let(::parseOuterRings).orEmpty()
+            }.onSuccess { rings -> _districtBoundary.value = rings }
+        }
     }
 
     /** Список місць і активних SOS не повинен переживати довше одного показу екрана — свіжий запит щоразу. */
@@ -82,6 +109,8 @@ class MapViewModel(
                 .onSuccess { requests -> _uiState.update { it.copy(sosRequests = requests) } }
         }
     }
+
+    fun selectTypeChip(type: AccessibilityType?) = filterStore.selectTypeChip(type)
 
     fun selectPlace(placeId: String) {
         _uiState.update { it.copy(selectedPlaceId = placeId, selectedSosId = null) }

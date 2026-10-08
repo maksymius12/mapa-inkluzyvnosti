@@ -1,82 +1,102 @@
 package com.academy.mapainkluzyvnosti.ui.navigation
 
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
-import androidx.compose.material3.Text
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.dp
 import androidx.navigation.NavDestination.Companion.hierarchy
-import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import com.academy.mapainkluzyvnosti.ui.components.liquidGlass
+import androidx.navigation.navArgument
+import com.academy.mapainkluzyvnosti.ui.components.BottomNavEntry
+import com.academy.mapainkluzyvnosti.ui.components.MapaBottomNavBar
+import com.academy.mapainkluzyvnosti.ui.screens.categories.CategoriesScreen
 import com.academy.mapainkluzyvnosti.ui.screens.favorites.FavoritesScreen
 import com.academy.mapainkluzyvnosti.ui.screens.filters.FiltersScreen
 import com.academy.mapainkluzyvnosti.ui.screens.login.LoginScreen
 import com.academy.mapainkluzyvnosti.ui.screens.map.MapScreen
+import com.academy.mapainkluzyvnosti.ui.screens.notifications.NotificationsScreen
+import com.academy.mapainkluzyvnosti.ui.screens.photoupload.PhotoUploadScreen
 import com.academy.mapainkluzyvnosti.ui.screens.placedetail.PlaceDetailScreen
 import com.academy.mapainkluzyvnosti.ui.screens.profile.ProfileScreen
 import com.academy.mapainkluzyvnosti.ui.screens.quickcheck.QuickCheckScreen
 import com.academy.mapainkluzyvnosti.ui.screens.route.RouteScreen
 import com.academy.mapainkluzyvnosti.ui.screens.search.SearchScreen
+import com.academy.mapainkluzyvnosti.ui.screens.settings.SettingsScreen
 import com.academy.mapainkluzyvnosti.ui.screens.sos.SosRequestScreen
-import dev.chrisbanes.haze.rememberHazeState
-
-/** Висота плаваючої скляної нижньої навігації + її відступ від краю — щоб контент екранів не ховався під нею. */
-val BottomNavInset = 92.dp
-
-private data class BottomNavItem(val route: String, val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector)
-
-private val bottomNavItems = listOf(
-    BottomNavItem(Routes.MAP, "Карта", Icons.Filled.Map),
-    BottomNavItem(Routes.FAVORITES, "Обране", Icons.Filled.Favorite),
-    BottomNavItem(Routes.PROFILE, "Профіль", Icons.Filled.Person)
-)
+import com.academy.mapainkluzyvnosti.ui.screens.welcome.WelcomeScreen
+import com.academy.mapainkluzyvnosti.ui.state.AppStartup
+import org.koin.compose.koinInject
 
 @Composable
-fun MapaNavHost() {
+fun MapaNavHost(startRoute: String) {
     val navController = rememberNavController()
+    val startup = koinInject<AppStartup>()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
     val showBottomBar = currentRoute in Routes.bottomNavRoutes
-    val hazeState = rememberHazeState()
-    val bottomInset = if (showBottomBar) BottomNavInset else 0.dp
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    fun goToLogin() = navController.navigate(Routes.LOGIN) { popUpTo(0) { inclusive = true } }
+
+    Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        bottomBar = {
+            if (showBottomBar) {
+                fun selected(route: String) = backStackEntry?.destination?.hierarchy?.any { it.route == route } == true
+                MapaBottomNavBar(
+                    entries = listOf(
+                        BottomNavEntry("Мапа", Icons.Filled.Map, selected(Routes.MAP)) {
+                            navController.switchTab(Routes.MAP)
+                        },
+                        BottomNavEntry("Категорії", Icons.Filled.GridView, selected(Routes.CATEGORIES)) {
+                            navController.switchTab(Routes.CATEGORIES)
+                        },
+                        BottomNavEntry("Обране", Icons.Filled.Favorite, selected(Routes.FAVORITES)) {
+                            navController.switchTab(Routes.favorites())
+                        },
+                        BottomNavEntry("Профіль", Icons.Filled.Person, selected(Routes.PROFILE)) {
+                            navController.switchTab(Routes.PROFILE)
+                        }
+                    )
+                )
+            }
+        }
+    ) { innerPadding ->
         NavHost(
             navController = navController,
-            startDestination = Routes.LOGIN,
-            modifier = Modifier.fillMaxSize()
+            startDestination = startRoute,
+            modifier = Modifier.padding(innerPadding)
         ) {
+            composable(Routes.WELCOME) {
+                val openLogin = {
+                    startup.markOnboardingSeen()
+                    navController.navigate(Routes.LOGIN) { popUpTo(Routes.WELCOME) { inclusive = true } }
+                }
+                WelcomeScreen(onStart = openLogin, onSignIn = openLogin)
+            }
             composable(Routes.LOGIN) {
                 LoginScreen(onLoggedIn = {
+                    startup.markOnboardingSeen()
                     navController.navigate(Routes.MAP) {
                         popUpTo(Routes.LOGIN) { inclusive = true }
                     }
                 })
             }
             composable(Routes.MAP) {
-                // Карта — єдиний екран, що навмисно тягнеться під плаваючу скляну навігацію
-                // (це і є контент, який крізь неї просвічує розмитим).
                 MapScreen(
-                    hazeState = hazeState,
-                    bottomInset = bottomInset,
                     onOpenPlace = { placeId -> navController.navigate(Routes.placeDetail(placeId)) },
                     onOpenSearch = { navController.navigate(Routes.SEARCH) },
                     onOpenFilters = { navController.navigate(Routes.FILTERS) },
@@ -92,21 +112,41 @@ fun MapaNavHost() {
             composable(Routes.FILTERS) {
                 FiltersScreen(onBack = { navController.popBackStack() })
             }
-            composable(Routes.FAVORITES) {
-                Box(Modifier.padding(bottom = bottomInset)) {
-                    FavoritesScreen(onOpenPlace = { placeId -> navController.navigate(Routes.placeDetail(placeId)) })
-                }
+            composable(Routes.CATEGORIES) {
+                CategoriesScreen(onCategoryChosen = { navController.switchTab(Routes.MAP) })
+            }
+            composable(
+                route = Routes.FAVORITES,
+                arguments = listOf(
+                    navArgument("tab") {
+                        type = NavType.StringType
+                        defaultValue = Routes.FAVORITES_TAB_PLACES
+                    }
+                )
+            ) { entry ->
+                FavoritesScreen(
+                    initialTab = entry.arguments?.getString("tab") ?: Routes.FAVORITES_TAB_PLACES,
+                    onBack = { navController.switchTab(Routes.MAP) },
+                    onOpenPlace = { placeId -> navController.navigate(Routes.placeDetail(placeId)) }
+                )
             }
             composable(Routes.PROFILE) {
-                Box(Modifier.padding(bottom = bottomInset)) {
-                    ProfileScreen(
-                        onSignedOut = {
-                            navController.navigate(Routes.LOGIN) {
-                                popUpTo(0) { inclusive = true }
-                            }
-                        }
-                    )
-                }
+                ProfileScreen(
+                    onOpenRoutes = { navController.navigate(Routes.favorites(Routes.FAVORITES_TAB_ROUTES)) },
+                    onOpenFavorites = { navController.navigate(Routes.favorites(Routes.FAVORITES_TAB_PLACES)) },
+                    onOpenNotifications = { navController.navigate(Routes.NOTIFICATIONS) },
+                    onOpenSettings = { navController.navigate(Routes.SETTINGS) },
+                    onOpenHelp = { navController.navigate(Routes.SOS_REQUEST) }
+                )
+            }
+            composable(Routes.SETTINGS) {
+                SettingsScreen(
+                    onBack = { navController.popBackStack() },
+                    onSignedOut = { goToLogin() }
+                )
+            }
+            composable(Routes.NOTIFICATIONS) {
+                NotificationsScreen(onBack = { navController.popBackStack() })
             }
             composable(Routes.ROUTE_PLANNER_PATTERN) { backStackEntry ->
                 val placeId = backStackEntry.arguments?.getString("placeId").orEmpty()
@@ -119,7 +159,7 @@ fun MapaNavHost() {
             composable(Routes.SOS_REQUEST) {
                 SosRequestScreen(
                     onDone = { navController.popBackStack() },
-                    onRequestLogin = { navController.navigate(Routes.LOGIN) { popUpTo(0) { inclusive = true } } }
+                    onRequestLogin = { goToLogin() }
                 )
             }
             composable(Routes.PLACE_DETAIL_PATTERN) { backStackEntry ->
@@ -130,7 +170,7 @@ fun MapaNavHost() {
                     onOpenQuickCheck = { navController.navigate(Routes.quickCheck(placeId)) },
                     onOpenPhotoUpload = { navController.navigate(Routes.photoUpload(placeId)) },
                     onOpenRoute = { navController.navigate(Routes.routePlanner(placeId)) },
-                    onRequestLogin = { navController.navigate(Routes.LOGIN) { popUpTo(0) { inclusive = true } } }
+                    onRequestLogin = { goToLogin() }
                 )
             }
             composable(Routes.QUICK_CHECK_PATTERN) { backStackEntry ->
@@ -138,47 +178,26 @@ fun MapaNavHost() {
                 QuickCheckScreen(
                     placeId = placeId,
                     onDone = { navController.popBackStack() },
-                    onRequestLogin = { navController.navigate(Routes.LOGIN) { popUpTo(0) { inclusive = true } } }
+                    onRequestLogin = { goToLogin() }
                 )
             }
             composable(Routes.PHOTO_UPLOAD_PATTERN) { backStackEntry ->
                 val placeId = backStackEntry.arguments?.getString("placeId").orEmpty()
-                com.academy.mapainkluzyvnosti.ui.screens.photoupload.PhotoUploadScreen(
+                PhotoUploadScreen(
                     placeId = placeId,
                     onDone = { navController.popBackStack() },
-                    onRequestLogin = { navController.navigate(Routes.LOGIN) { popUpTo(0) { inclusive = true } } }
+                    onRequestLogin = { goToLogin() }
                 )
             }
         }
+    }
+}
 
-        if (showBottomBar) {
-            val barShape = RoundedCornerShape(28.dp)
-            NavigationBar(
-                containerColor = Color.Transparent,
-                tonalElevation = 0.dp,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(horizontal = 16.dp, vertical = 12.dp)
-                    .liquidGlass(hazeState, shape = barShape)
-            ) {
-                bottomNavItems.forEach { item ->
-                    val selected = backStackEntry?.destination?.hierarchy
-                        ?.any { it.route == item.route } == true
-                    NavigationBarItem(
-                        selected = selected,
-                        onClick = {
-                            navController.navigate(item.route) {
-                                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        },
-                        icon = { Icon(item.icon, contentDescription = item.label) },
-                        label = { Text(item.label) },
-                        colors = NavigationBarItemDefaults.colors(indicatorColor = Color.White.copy(alpha = 0.16f))
-                    )
-                }
-            }
-        }
+/** Перехід між вкладками нижньої навігації зі збереженням стану; коренем стеку є мапа. */
+private fun NavHostController.switchTab(route: String) {
+    navigate(route) {
+        popUpTo(Routes.MAP) { saveState = true }
+        launchSingleTop = true
+        restoreState = true
     }
 }

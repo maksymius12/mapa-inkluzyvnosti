@@ -5,5 +5,10 @@ object MapStyles {
     const val LIBERTY = "https://tiles.openfreemap.org/styles/liberty"
     const val DARK = "https://tiles.openfreemap.org/styles/dark"
 
-    fun forTheme(isDarkTheme: Boolean): String = if (isDarkTheme) DARK else LIBERTY
+    /**
+     * За макетом мапа світла і в темному інтерфейсі: кольорові мітки легенди на ній читаються
+     * найкраще. Темний стиль лишається доступним як [DARK].
+     */
+    @Suppress("UNUSED_PARAMETER")
+    fun forTheme(isDarkTheme: Boolean): String = LIBERTY
 }

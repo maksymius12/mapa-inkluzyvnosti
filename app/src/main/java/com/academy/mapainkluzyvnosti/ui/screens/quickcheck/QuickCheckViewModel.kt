@@ -63,6 +63,7 @@ class QuickCheckViewModel(
                 val latestPhoto = placeRepository.getLatestPhoto(placeId)
                 val finalStatus = ComputeAccessStatus.combineWithAiStatus(computedStatus, latestPhoto?.aiSuggestedStatus)
                 placeRepository.updatePlaceStatus(placeId, finalStatus)
+                placeRepository.updateAccessibleParking(placeId, checkResult.accessibleParking)
 
                 val user = currentUserStore.user.value
                 if (user?.ageGroup == UserAgeGroup.STUDENT) {

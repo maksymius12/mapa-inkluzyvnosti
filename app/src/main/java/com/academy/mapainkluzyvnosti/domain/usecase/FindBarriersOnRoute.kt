@@ -47,4 +47,36 @@ object FindBarriersOnRoute {
 
     private fun lngToMeters(lng: Double, atLat: Double): Double =
         Math.toRadians(lng) * EARTH_RADIUS_METERS * cos(Math.toRadians(atLat))
+
+    /**
+     * Ділянки маршруту навколо кожного бар'єра (до [spanMeters] в обидва боки від найближчої точки лінії) —
+     * їх підсвічують червоним поверх лінії маршруту.
+     */
+    fun highlightSegments(route: Route, barriers: List<Place>, spanMeters: Double = 45.0): List<List<GeoPoint>> {
+        val geometry = route.geometry
+        if (geometry.size < 2) return emptyList()
+        return barriers.mapNotNull { place ->
+            val point = GeoPoint(place.lat, place.lng)
+            val nearest = geometry.indices.minByOrNull { i -> distanceMeters(point, geometry[i]) } ?: return@mapNotNull null
+            var from = nearest
+            var covered = 0.0
+            while (from > 0 && covered < spanMeters) {
+                covered += distanceMeters(geometry[from], geometry[from - 1])
+                from--
+            }
+            var to = nearest
+            covered = 0.0
+            while (to < geometry.lastIndex && covered < spanMeters) {
+                covered += distanceMeters(geometry[to], geometry[to + 1])
+                to++
+            }
+            geometry.subList(from, to + 1).takeIf { it.size >= 2 }
+        }
+    }
+
+    private fun distanceMeters(a: GeoPoint, b: GeoPoint): Double {
+        val dx = lngToMeters(a.lng - b.lng, a.lat)
+        val dy = latToMeters(a.lat - b.lat)
+        return sqrt(dx * dx + dy * dy)
+    }
 }

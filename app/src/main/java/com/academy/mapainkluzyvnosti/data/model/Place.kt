@@ -12,5 +12,7 @@ data class Place(
     val source: String,
     val verifiedNote: String,
     val rating: Double? = null,
-    val reviewCount: Int = 0
+    val reviewCount: Int = 0,
+    /** Паркування для МГН — додатковий атрибут, у розрахунок статусу не входить. */
+    val hasAccessibleParking: Boolean = false
 )

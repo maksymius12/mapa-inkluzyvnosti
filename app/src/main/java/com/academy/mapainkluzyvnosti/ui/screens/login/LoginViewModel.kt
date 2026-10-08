@@ -140,12 +140,13 @@ class LoginViewModel(
                 val state = _uiState.value
                 val profile = authRepository.fetchOrCreateProfile(
                     userId = userId,
-                    defaultName = "Користувач",
+                    defaultName = authRepository.suggestedDisplayName() ?: "Користувач",
                     defaultPurposeRole = state.purposeRole,
                     defaultAgeGroup = state.ageGroup
                 )
                 authRepository.updateProfileRoles(userId, state.purposeRole, state.ageGroup)
                 currentUserStore.set(profile.copy(purposeRole = state.purposeRole, ageGroup = state.ageGroup))
+                demoModeStore.disable()
             }.onSuccess {
                 _uiState.update { it.copy(isLoading = false, isLoggedIn = true) }
             }.onFailure { e ->

@@ -11,5 +11,7 @@ data class CheckResult(
     val elevator: Boolean,
     val toilet: Boolean,
     val tactile: Boolean,
-    @SerialName("staff_assistance") val staffAssistance: Boolean
+    @SerialName("staff_assistance") val staffAssistance: Boolean,
+    /** Додатковий атрибут: у розрахунок статусу за 7 критеріями не входить. */
+    @SerialName("accessible_parking") val accessibleParking: Boolean = false
 )

@@ -13,14 +13,50 @@ import io.github.jan.supabase.auth.status.SessionStatus
 import io.github.jan.supabase.functions.functions
 import io.github.jan.supabase.postgrest.postgrest
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
 class AuthRepository(private val client: SupabaseClient) {
 
+    private companion object {
+        const val SESSION_RESTORE_TIMEOUT_MS = 4000L
+    }
+
     val sessionStatus: StateFlow<SessionStatus> get() = client.auth.sessionStatus
 
     val currentUserId: String? get() = client.auth.currentUserOrNull()?.id
+
+    /**
+     * Чекає, поки Supabase відновить збережену сесію з диска, і каже, чи користувач уже ввійшов.
+     * Без мережі сесія лишається чинною локально, тож таймаут трактуємо як «немає сесії».
+     */
+    suspend fun awaitRestoredSession(): Boolean {
+        withTimeoutOrNull(SESSION_RESTORE_TIMEOUT_MS) {
+            client.auth.sessionStatus.first { it !is SessionStatus.Initializing }
+        }
+        return currentUserId != null
+    }
+
+    /** Ім'я для відображення з реального акаунта: ПІБ із Google, інакше локальна частина email. */
+    fun suggestedDisplayName(): String? {
+        val user = client.auth.currentUserOrNull() ?: return null
+        val metadata = user.userMetadata
+        val fromMetadata = listOf("full_name", "name")
+            .firstNotNullOfOrNull { key -> metadata?.get(key)?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() } }
+        return fromMetadata ?: user.email?.substringBefore("@")?.takeIf { it.isNotBlank() }
+    }
+
+    fun currentAvatarUrl(): String? =
+        client.auth.currentUserOrNull()?.userMetadata
+            ?.let { metadata ->
+                listOf("avatar_url", "picture").firstNotNullOfOrNull { key ->
+                    metadata[key]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
+                }
+            }
 
     suspend fun signInWithGoogleIdToken(idToken: String) {
         client.auth.signInWith(IDToken) {

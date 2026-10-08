@@ -20,13 +20,14 @@ import kotlinx.coroutines.launch
 data class FavoritesUiState(
     val places: List<Place> = emptyList(),
     val routes: List<Route> = emptyList(),
+    val photoUrls: Map<String, String> = emptyMap(),
     val isLoading: Boolean = true
 )
 
 class FavoritesViewModel(
     private val favoriteRepository: FavoriteRepository,
     private val placeRepository: PlaceRepository,
-    favoriteRoutesStore: FavoriteRoutesStore,
+    private val favoriteRoutesStore: FavoriteRoutesStore,
     private val currentUserStore: CurrentUserStore
 ) : ViewModel() {
 
@@ -53,9 +54,19 @@ class FavoritesViewModel(
                 placeRepository.getAllPlaces().filter { it.id in favoriteIds }
             }.onSuccess { places ->
                 _uiState.update { it.copy(places = places, isLoading = false) }
+                loadPhotos(places)
             }.onFailure {
                 _uiState.update { it.copy(isLoading = false) }
             }
         }
     }
+
+    private fun loadPhotos(places: List<Place>) {
+        viewModelScope.launch {
+            runCatching { placeRepository.getLatestPhotoUrls(places.map { it.id }) }
+                .onSuccess { urls -> _uiState.update { it.copy(photoUrls = urls) } }
+        }
+    }
+
+    fun removeRoute(route: Route) = favoriteRoutesStore.toggle(route)
 }

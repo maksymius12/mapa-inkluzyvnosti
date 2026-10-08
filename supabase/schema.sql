@@ -20,6 +20,7 @@ create table places (
   verified_note text,
   rating numeric,
   review_count int default 0,
+  has_accessible_parking boolean not null default false, -- додатково, не входить у розрахунок статусу
   created_at timestamptz default now()
 );
 create index places_location_idx on places using gist (location);
@@ -30,6 +31,7 @@ create table checks (
   user_id uuid references auth.users(id),
   ramp boolean, door_width boolean, threshold boolean,
   elevator boolean, toilet boolean, tactile boolean, staff_assistance boolean,
+  accessible_parking boolean default false, -- додатково, не входить у розрахунок статусу
   comment text,
   created_at timestamptz default now()
 );
@@ -83,10 +85,12 @@ returns table (
   id text, name text, address text, category text,
   lat double precision, lng double precision,
   status text, source text, verified_note text,
-  rating numeric, review_count int
+  rating numeric, review_count int,
+  has_accessible_parking boolean
 ) as $$
   select p.id, p.name, p.address, p.category, p.lat, p.lng,
-         p.status, p.source, p.verified_note, p.rating, p.review_count
+         p.status, p.source, p.verified_note, p.rating, p.review_count,
+         p.has_accessible_parking
   from places p
   where ST_DWithin(p.location, ST_MakePoint(lng, lat)::geography, radius_m);
 $$ language sql stable;

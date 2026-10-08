@@ -6,9 +6,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PriorityHigh
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -26,11 +23,7 @@ fun SosInfoCard(
     onResolve: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.medium,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-    ) {
+    MapaCard(modifier = modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Filled.PriorityHigh, contentDescription = null, tint = StatusPartial)
@@ -49,9 +42,7 @@ fun SosInfoCard(
                 )
             }
             if (isVolunteer) {
-                Button(onClick = onResolve, modifier = Modifier.padding(top = 12.dp)) {
-                    Text("Вирішено")
-                }
+                PrimaryButton(text = "Вирішено", onClick = onResolve, modifier = Modifier.padding(top = 12.dp))
             }
         }
     }

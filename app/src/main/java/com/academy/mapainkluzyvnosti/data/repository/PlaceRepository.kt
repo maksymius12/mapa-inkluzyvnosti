@@ -25,7 +25,29 @@ class PlaceRepository(private val client: SupabaseClient) {
 
     suspend fun getAllPlaces(): List<Place> {
         val places = client.postgrest.from("places").select().decodeList<PlaceReadDto>()
-        return places.map { it.toDomain(latestCheck = null) }
+        // Тип доступності на мапі береться з останньої перевірки кожного закладу.
+        val latestChecks = runCatching { latestChecksByPlace() }.getOrDefault(emptyMap())
+        return places.map { it.toDomain(latestCheck = latestChecks[it.id]) }
+    }
+
+    private suspend fun latestChecksByPlace(): Map<String, CheckDto> =
+        client.postgrest.from("checks")
+            .select { order("created_at", Order.DESCENDING) }
+            .decodeList<CheckDto>()
+            .groupBy { it.placeId }
+            .mapValues { (_, checks) -> checks.first() }
+
+    /** Останнє фото кожного з [placeIds] (для мініатюр у списках) одним запитом. */
+    suspend fun getLatestPhotoUrls(placeIds: Collection<String>): Map<String, String> {
+        if (placeIds.isEmpty()) return emptyMap()
+        return client.postgrest.from("place_photos")
+            .select {
+                filter { isIn("place_id", placeIds.toList()) }
+                order("created_at", Order.DESCENDING)
+            }
+            .decodeList<PlacePhotoDto>()
+            .groupBy { it.placeId }
+            .mapValues { (_, photos) -> photos.first().url }
     }
 
     suspend fun getPlaceById(id: String): Place? {
@@ -77,6 +99,12 @@ class PlaceRepository(private val client: SupabaseClient) {
         }) { filter { eq("id", placeId) } }
     }
 
+    suspend fun updateAccessibleParking(placeId: String, hasAccessibleParking: Boolean) {
+        client.postgrest.from("places").update({
+            set("has_accessible_parking", hasAccessibleParking)
+        }) { filter { eq("id", placeId) } }
+    }
+
     suspend fun uploadPlacePhoto(placeId: String, userId: String, bytes: ByteArray, fileExtension: String): PlacePhotoDto {
         val path = "$placeId/${UUID.randomUUID()}.$fileExtension"
         photoBucket.upload(path, bytes)
@@ -118,6 +146,7 @@ class PlaceRepository(private val client: SupabaseClient) {
         source = source,
         verifiedNote = verifiedNote,
         rating = rating,
-        reviewCount = reviewCount
+        reviewCount = reviewCount,
+        hasAccessibleParking = hasAccessibleParking
     )
 }
