@@ -100,7 +100,9 @@ fun MapaNavHost(startRoute: String) {
                     onOpenPlace = { placeId -> navController.navigate(Routes.placeDetail(placeId)) },
                     onOpenSearch = { navController.navigate(Routes.SEARCH) },
                     onOpenFilters = { navController.navigate(Routes.FILTERS) },
-                    onOpenSos = { navController.navigate(Routes.SOS_REQUEST) }
+                    onOpenSos = { navController.navigate(Routes.SOS_REQUEST) },
+                    onOpenQuickCheck = { placeId -> navController.navigate(Routes.quickCheck(placeId)) },
+                    onRequestLogin = { goToLogin() }
                 )
             }
             composable(Routes.SEARCH) {

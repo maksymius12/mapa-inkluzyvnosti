@@ -7,11 +7,15 @@ import androidx.compose.runtime.Composable
 
 /** Показується замість реального запиту в базу, коли дію намагається виконати гість (demo-режим). */
 @Composable
-fun DemoGateDialog(onDismiss: () -> Unit, onSignInWithGoogle: () -> Unit) {
+fun DemoGateDialog(
+    onDismiss: () -> Unit,
+    onSignInWithGoogle: () -> Unit,
+    message: String = "Щоб додавати дані, увійди через Google"
+) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Це демо-режим") },
-        text = { Text("Щоб додавати дані, увійди через Google") },
+        text = { Text(message) },
         confirmButton = {
             TextButton(onClick = onSignInWithGoogle) { Text("Увійти через Google") }
         },

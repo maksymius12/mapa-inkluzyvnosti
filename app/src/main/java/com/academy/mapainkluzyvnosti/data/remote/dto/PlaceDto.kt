@@ -22,7 +22,9 @@ data class PlaceReadDto(
     @SerialName("verified_note") val verifiedNote: String,
     val rating: Double? = null,
     @SerialName("review_count") val reviewCount: Int = 0,
-    @SerialName("has_accessible_parking") val hasAccessibleParking: Boolean = false
+    @SerialName("has_accessible_parking") val hasAccessibleParking: Boolean = false,
+    /** Автор користувацького місця (source = "user"); null — OSM або старі записи. */
+    @SerialName("created_by") val createdBy: String? = null
 )
 
 /**
@@ -42,3 +44,31 @@ data class PlaceWriteDto(
 )
 
 fun wktPoint(lat: Double, lng: Double): String = "POINT($lng $lat)"
+
+/**
+ * Нове користувацьке місце. `id`, `status`, `created_at` ставить сервер (тригер places_before_insert),
+ * він же перевіряє межі району, добовий ліміт і поля. Без значень за замовчуванням —
+ * щоб усі поля гарантовано потрапили в JSON.
+ */
+@Serializable
+data class UserPlaceInsertDto(
+    val name: String,
+    val address: String,
+    val category: PlaceCategory,
+    val location: String,
+    val source: String,
+    @SerialName("created_by") val createdBy: String
+)
+
+@Serializable
+data class PlaceReportInsertDto(
+    @SerialName("place_id") val placeId: String,
+    @SerialName("reporter_id") val reporterId: String,
+    val reason: String,
+    val comment: String?
+)
+
+@Serializable
+data class PlaceReportReadDto(
+    @SerialName("place_id") val placeId: String
+)

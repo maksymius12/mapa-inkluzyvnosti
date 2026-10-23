@@ -1,6 +1,7 @@
 package com.academy.mapainkluzyvnosti.ui.components
 
 import android.graphics.Bitmap
+import android.graphics.DashPathEffect
 import android.graphics.Paint
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
@@ -12,6 +13,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.core.graphics.applyCanvas
 import com.academy.mapainkluzyvnosti.data.model.AccessibilityType
+import com.academy.mapainkluzyvnosti.data.model.PlaceCategory
 import com.academy.mapainkluzyvnosti.ui.theme.LegendNeutral
 import com.academy.mapainkluzyvnosti.ui.theme.StatusBarrier
 
@@ -33,6 +35,35 @@ fun renderTypeMarkerDrawable(
         glyph = visual?.glyph,
         glyphColor = visual?.glyphColor ?: Color.White
     )
+}
+
+/**
+ * Мітка щойно доданого користувачем місця, яке ще не перевірили: колір і значок категорії,
+ * пунктирна біла обвідка — як пунктирний бейдж «Не перевірено».
+ */
+fun renderUnverifiedCategoryMarkerDrawable(
+    context: android.content.Context,
+    category: PlaceCategory,
+    sizePx: Int = 96
+): Drawable {
+    val visual = category.visual
+    val bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
+    bitmap.applyCanvas {
+        val radius = sizePx / 2f
+        val ringWidth = sizePx * 0.07f
+        drawCircle(radius, radius, radius - ringWidth, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = visual.color.toArgb() })
+        val dashedRing = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.WHITE
+            style = Paint.Style.STROKE
+            strokeWidth = ringWidth
+            strokeCap = Paint.Cap.ROUND
+            pathEffect = DashPathEffect(floatArrayOf(sizePx * 0.1f, sizePx * 0.08f), 0f)
+        }
+        drawCircle(radius, radius, radius - ringWidth / 2f, dashedRing)
+        val iconSize = sizePx * 0.5f
+        visual.icon.drawOnCanvas(this, (sizePx - iconSize) / 2f, (sizePx - iconSize) / 2f, iconSize, Color.White)
+    }
+    return BitmapDrawable(context.resources, bitmap)
 }
 
 /** Червона мітка бар'єра на маршруті. */

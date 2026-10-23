@@ -10,11 +10,13 @@ import com.academy.mapainkluzyvnosti.data.repository.CheckRepository
 import com.academy.mapainkluzyvnosti.data.repository.FavoriteRepository
 import com.academy.mapainkluzyvnosti.data.repository.PlaceRepository
 import com.academy.mapainkluzyvnosti.data.repository.SosRepository
+import com.academy.mapainkluzyvnosti.data.repository.UserPlaceRepository
 import com.academy.mapainkluzyvnosti.domain.usecase.BuildRoute
 import com.academy.mapainkluzyvnosti.domain.usecase.ImportOsmPlaces
 import com.academy.mapainkluzyvnosti.ui.screens.favorites.FavoritesViewModel
 import com.academy.mapainkluzyvnosti.ui.screens.filters.FiltersViewModel
 import com.academy.mapainkluzyvnosti.ui.screens.login.LoginViewModel
+import com.academy.mapainkluzyvnosti.ui.screens.map.AddPlaceViewModel
 import com.academy.mapainkluzyvnosti.ui.screens.map.MapViewModel
 import com.academy.mapainkluzyvnosti.ui.screens.photoupload.PhotoUploadViewModel
 import com.academy.mapainkluzyvnosti.ui.screens.placedetail.PlaceDetailViewModel
@@ -49,6 +51,7 @@ val repositoryModule = module {
     single { AuthRepository(get()) }
     single { FavoriteRepository(get()) }
     single { SosRepository(get()) }
+    single { UserPlaceRepository(get(), get()) }
 }
 
 val useCaseModule = module {
@@ -69,9 +72,10 @@ val stateModule = module {
 val viewModelModule = module {
     viewModel { LoginViewModel(get(), get(), get()) }
     viewModel { MapViewModel(get(), get(), get(), get(), get()) }
+    viewModel { AddPlaceViewModel(get(), get(), get(), get()) }
     viewModel { SearchViewModel(get()) }
     viewModel { FiltersViewModel(get()) }
-    viewModel { (placeId: String) -> PlaceDetailViewModel(placeId, get(), get(), get(), get()) }
+    viewModel { (placeId: String) -> PlaceDetailViewModel(placeId, get(), get(), get(), get(), get()) }
     viewModel { (placeId: String) -> QuickCheckViewModel(placeId, get(), get(), get(), get(), get()) }
     viewModel { (placeId: String) -> PhotoUploadViewModel(placeId, get(), get(), get()) }
     viewModel { (placeId: String) -> RouteViewModel(get(), get(), get(), get(), placeId) }

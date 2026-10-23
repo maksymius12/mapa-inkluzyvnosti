@@ -134,7 +134,7 @@ class PlaceRepository(private val client: SupabaseClient) {
         }
     }
 
-    private fun PlaceReadDto.toDomain(latestCheck: CheckDto?) = Place(
+    fun PlaceReadDto.toDomain(latestCheck: CheckDto?) = Place(
         id = id,
         name = name,
         address = address,
@@ -147,6 +147,7 @@ class PlaceRepository(private val client: SupabaseClient) {
         verifiedNote = verifiedNote,
         rating = rating,
         reviewCount = reviewCount,
-        hasAccessibleParking = hasAccessibleParking
+        hasAccessibleParking = hasAccessibleParking,
+        createdBy = createdBy
     )
 }

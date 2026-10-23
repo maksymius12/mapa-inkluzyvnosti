@@ -18,6 +18,11 @@ data class NominatimResult(
 
 data class GeocodedPoint(val lat: Double, val lng: Double)
 
+@Serializable
+private data class NominatimReverseResult(
+    val address: Map<String, String> = emptyMap()
+)
+
 class NominatimApi(private val client: HttpClient) {
 
     suspend fun searchDistrictPolygon(query: String): NominatimResult? {
@@ -31,6 +36,27 @@ class NominatimApi(private val client: HttpClient) {
         val lat = result.lat?.toDoubleOrNull() ?: return null
         val lng = result.lon?.toDoubleOrNull() ?: return null
         return GeocodedPoint(lat, lng)
+    }
+
+    /**
+     * Зворотне геокодування для форми нового місця: «вулиця, будинок» українською.
+     * null — Nominatim не знайшов вулицю (адреса тоді необов'язкова й лишається порожньою).
+     */
+    suspend fun reverseAddress(lat: Double, lng: Double): String? {
+        val result: NominatimReverseResult = client.get("https://nominatim.openstreetmap.org/reverse") {
+            header("User-Agent", "MapaInkluzyvnosti/1.0 (Android; accessibility-map)")
+            parameter("format", "jsonv2")
+            parameter("lat", lat)
+            parameter("lon", lng)
+            parameter("zoom", "18")
+            parameter("addressdetails", "1")
+            parameter("accept-language", "uk")
+        }.body()
+        val street = listOf("road", "pedestrian", "square", "footway", "neighbourhood")
+            .firstNotNullOfOrNull { key -> result.address[key]?.takeIf { it.isNotBlank() } }
+            ?: return null
+        val house = result.address["house_number"]?.takeIf { it.isNotBlank() }
+        return listOfNotNull(street, house).joinToString(", ")
     }
 
     private suspend fun search(query: String, includePolygon: Boolean): List<NominatimResult> =

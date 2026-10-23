@@ -1,6 +1,7 @@
 package com.academy.mapainkluzyvnosti.ui.screens.map
 
 import android.Manifest
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -45,6 +46,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -62,6 +64,7 @@ import com.academy.mapainkluzyvnosti.data.model.AccessibilityType
 import com.academy.mapainkluzyvnosti.data.model.GeoPoint
 import com.academy.mapainkluzyvnosti.data.model.Place
 import com.academy.mapainkluzyvnosti.data.model.markerType
+import com.academy.mapainkluzyvnosti.ui.components.DemoGateDialog
 import com.academy.mapainkluzyvnosti.ui.components.MapaCard
 import com.academy.mapainkluzyvnosti.ui.components.MapaChip
 import com.academy.mapainkluzyvnosti.ui.components.PlaceThumbnail
@@ -83,6 +86,7 @@ import com.academy.mapainkluzyvnosti.ui.maplibre.rememberMapLibreMapView
 import com.academy.mapainkluzyvnosti.ui.maplibre.setDistrictBoundary
 import com.academy.mapainkluzyvnosti.ui.maplibre.setUserLocation
 import com.academy.mapainkluzyvnosti.ui.maplibre.typeImageId
+import com.academy.mapainkluzyvnosti.ui.maplibre.unverifiedCategoryImageId
 import com.google.gson.JsonPrimitive
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
@@ -98,6 +102,7 @@ private val SHEVCHENKIVSKYI_CENTER = LatLng(50.4550, 30.4850)
 private const val DEFAULT_ZOOM = 13.5
 private const val MY_LOCATION_ZOOM = 16.0
 private const val SELECTED_ICON_SCALE = 1.3f
+private const val PIN_MOVE_DURATION_MS = 300
 
 @Composable
 fun MapScreen(
@@ -105,9 +110,13 @@ fun MapScreen(
     onOpenSearch: () -> Unit,
     onOpenFilters: () -> Unit,
     onOpenSos: () -> Unit,
-    viewModel: MapViewModel = koinViewModel()
+    onOpenQuickCheck: (String) -> Unit,
+    onRequestLogin: () -> Unit,
+    viewModel: MapViewModel = koinViewModel(),
+    addPlaceViewModel: AddPlaceViewModel = koinViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val addState by addPlaceViewModel.uiState.collectAsState()
     val isVolunteer by viewModel.isVolunteer.collectAsState()
     val selection by viewModel.filterSelection.collectAsState()
     val districtBoundary by viewModel.districtBoundary.collectAsState()
@@ -210,6 +219,31 @@ fun MapScreen(
         onDispose { map?.removeOnMapClickListener(listener) }
     }
 
+    // Довге натискання ставить маркер нового місця в цю точку (вмикає режим вибору, якщо ще не ввімкнено).
+    val addStep by rememberUpdatedState(addState.step)
+    DisposableEffect(maplibreMap) {
+        val map = maplibreMap
+        val listener = MapLibreMap.OnMapLongClickListener { latLng ->
+            val picking = when (addStep) {
+                AddPlaceStep.PICKING_LOCATION -> true
+                AddPlaceStep.IDLE -> addPlaceViewModel.startPicking()
+                AddPlaceStep.FORM -> false
+            }
+            if (picking) {
+                viewModel.clearSelection()
+                map?.animateCamera(CameraUpdateFactory.newLatLng(latLng), PIN_MOVE_DURATION_MS)
+            }
+            true
+        }
+        map?.addOnMapLongClickListener(listener)
+        onDispose { map?.removeOnMapLongClickListener(listener) }
+    }
+
+    fun confirmPickedLocation() {
+        val target = maplibreMap?.cameraPosition?.target ?: return
+        addPlaceViewModel.confirmLocation(GeoPoint(target.latitude, target.longitude), districtBoundary)
+    }
+
     val placesSymbolManager = remember(mapStyle) {
         val map = maplibreMap
         val style = mapStyle
@@ -245,9 +279,15 @@ fun MapScreen(
         val manager = placesSymbolManager ?: return@LaunchedEffect
         manager.deleteAll()
         val options = uiState.places.map { place ->
+            // Додане користувачем і ще не перевірене місце — пунктирна мітка своєї категорії.
+            val image = if (place.awaitsFirstCheck) {
+                unverifiedCategoryImageId(place.category)
+            } else {
+                typeImageId(place.markerType(uiState.activeTypes))
+            }
             SymbolOptions()
                 .withLatLng(LatLng(place.lat, place.lng))
-                .withIconImage(typeImageId(place.markerType(uiState.activeTypes)))
+                .withIconImage(image)
                 .withIconSize(if (place.id == uiState.selectedPlaceId) SELECTED_ICON_SCALE else 1f)
                 .withData(JsonPrimitive(place.id))
         }
@@ -270,16 +310,85 @@ fun MapScreen(
         uiState.errorMessage?.let { snackbarHostState.showSnackbar(it) }
     }
 
+    LaunchedEffect(addState.message) {
+        addState.message?.let {
+            snackbarHostState.showSnackbar(it)
+            addPlaceViewModel.consumeMessage()
+        }
+    }
+
+    // Нова точка — одразу на мапі, без очікування повторного завантаження.
+    LaunchedEffect(addState.createdPlace?.id) {
+        addState.createdPlace?.let(viewModel::onPlaceAdded)
+    }
+
+    if (addState.showDemoGate) {
+        DemoGateDialog(
+            onDismiss = addPlaceViewModel::dismissDemoGate,
+            onSignInWithGoogle = {
+                addPlaceViewModel.dismissDemoGate()
+                onRequestLogin()
+            },
+            message = "Увійдіть, щоб додавати місця"
+        )
+    }
+
+    if (addState.step == AddPlaceStep.FORM) {
+        AddPlaceSheet(
+            form = addState.form,
+            isAddressLoading = addState.isAddressLoading,
+            isSubmitting = addState.isSubmitting,
+            submitError = addState.submitError,
+            onFormChange = addPlaceViewModel::onFormChange,
+            onSubmit = { addPlaceViewModel.submit() },
+            onChangeLocation = addPlaceViewModel::backToPicking,
+            onDismiss = addPlaceViewModel::cancel
+        )
+    }
+
+    if (addState.duplicates.isNotEmpty()) {
+        DuplicatePlacesDialog(
+            places = addState.duplicates,
+            onCancel = addPlaceViewModel::cancel,
+            onAddAnyway = { addPlaceViewModel.submit(ignoreDuplicates = true) }
+        )
+    }
+
+    addState.createdPlace?.let { place ->
+        PlaceAddedDialog(
+            place = place,
+            hiddenByFilters = !selection.matches(place),
+            onCheck = {
+                addPlaceViewModel.consumeCreatedPlace()
+                onOpenQuickCheck(place.id)
+            },
+            onLater = addPlaceViewModel::consumeCreatedPlace
+        )
+    }
+
+    val isPickingLocation = addState.step != AddPlaceStep.IDLE
+    BackHandler(enabled = addState.step == AddPlaceStep.PICKING_LOCATION, onBack = addPlaceViewModel::cancel)
+
     // Мапа починається під системним рядком стану, щоб його іконки читалися на темному фоні застосунку.
     Box(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
         AndroidView(factory = { mapView }, modifier = Modifier.fillMaxSize())
 
-        if (uiState.isLoading) {
+        if (uiState.isLoading && !isPickingLocation) {
             CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
         }
 
+        if (isPickingLocation) {
+            CenterPin()
+            if (addState.step == AddPlaceStep.PICKING_LOCATION) {
+                LocationPickerControls(
+                    onConfirm = ::confirmPickedLocation,
+                    onCancel = addPlaceViewModel::cancel
+                )
+            }
+        }
+
         // Верх: пошук, чипи-фільтри, кнопка фільтрів.
-        Column(
+        if (!isPickingLocation) Column(
             modifier = Modifier
                 .align(Alignment.TopStart)
                 .fillMaxWidth()
@@ -309,13 +418,18 @@ fun MapScreen(
             }
         }
 
-        // Низ: SOS зліва, «моє місце» й масштаб справа, під ними — картка вибраного місця/SOS.
-        Column(modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
+        // Низ: «Додати місце» і SOS зліва, «моє місце» й масштаб справа, під ними — картка вибраного місця/SOS.
+        if (!isPickingLocation) Column(modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
             Row(
                 verticalAlignment = Alignment.Bottom,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)
             ) {
-                SosHelpButton(onClick = onOpenSos)
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    AddPlaceButton(onClick = {
+                        if (addPlaceViewModel.startPicking()) viewModel.clearSelection()
+                    })
+                    SosHelpButton(onClick = onOpenSos)
+                }
                 Spacer(Modifier.weight(1f))
                 Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     MapControlButton(

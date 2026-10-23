@@ -8,6 +8,7 @@ import com.academy.mapainkluzyvnosti.data.model.Place
 import com.academy.mapainkluzyvnosti.data.model.SosRequest
 import com.academy.mapainkluzyvnosti.data.model.UserPurposeRole
 import com.academy.mapainkluzyvnosti.data.remote.NominatimApi
+import com.academy.mapainkluzyvnosti.data.remote.toUserMessage
 import com.academy.mapainkluzyvnosti.data.repository.PlaceRepository
 import com.academy.mapainkluzyvnosti.data.repository.SosRepository
 import com.academy.mapainkluzyvnosti.domain.usecase.parseOuterRings
@@ -99,8 +100,18 @@ class MapViewModel(
                     allPlaces.value = places
                     _uiState.update { it.copy(isLoading = false) }
                 }
-                .onFailure { e -> _uiState.update { it.copy(isLoading = false, errorMessage = e.message) } }
+                .onFailure { e ->
+                    _uiState.update {
+                        it.copy(isLoading = false, errorMessage = e.toUserMessage("Не вдалося завантажити місця. Спробуйте пізніше"))
+                    }
+                }
         }
+    }
+
+    /** Щойно додане користувачем місце — одразу на мапі й вибране, не чекаючи наступного оновлення. */
+    fun onPlaceAdded(place: Place) {
+        allPlaces.update { places -> places.filterNot { it.id == place.id } + place }
+        _uiState.update { it.copy(selectedPlaceId = place.id, selectedSosId = null) }
     }
 
     fun loadSosRequests() {

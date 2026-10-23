@@ -22,9 +22,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AddAPhoto
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Directions
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.PlaylistAddCheck
 import androidx.compose.material.icons.outlined.Accessible
 import androidx.compose.material.icons.outlined.Elevator
@@ -37,10 +40,14 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -83,125 +90,204 @@ fun PlaceDetailScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val place = uiState.place
+    val snackbarHostState = remember { SnackbarHostState() }
 
     if (uiState.showDemoGate) {
         DemoGateDialog(onDismiss = viewModel::dismissDemoGate, onSignInWithGoogle = onRequestLogin)
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        when {
-            uiState.isLoading -> Box(modifier = Modifier.weight(1f).fillMaxWidth().statusBarsPadding(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
-            }
-            place == null -> Column(
-                modifier = Modifier.weight(1f).fillMaxWidth().statusBarsPadding(),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Row(modifier = Modifier.fillMaxWidth().padding(8.dp)) {
-                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад") }
-                }
-                Text(
-                    text = "Місце не знайдено",
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(24.dp)
-                )
-            }
-            else -> {
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                        .verticalScroll(rememberScrollState())
-                ) {
-                    PhotoHeader(
-                        place = place,
-                        photoUrl = uiState.latestPhoto?.url,
-                        isFavorite = uiState.isFavorite,
-                        onBack = onBack,
-                        onToggleFavorite = viewModel::toggleFavorite
-                    )
+    // Після видалення власного місця повертаємось назад (мапа оновиться при поверненні).
+    LaunchedEffect(uiState.isDeleted) {
+        if (uiState.isDeleted) onBack()
+    }
 
-                    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-                        Text(
-                            text = place.name,
-                            style = MaterialTheme.typography.headlineSmall,
-                            modifier = Modifier.padding(top = 16.dp)
+    LaunchedEffect(uiState.message) {
+        uiState.message?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.consumeMessage()
+        }
+    }
+
+    uiState.editForm?.let { form ->
+        EditPlaceSheet(
+            form = form,
+            isSaving = uiState.isSaving,
+            error = uiState.editError,
+            onFormChange = viewModel::onEditFormChange,
+            onSave = viewModel::saveEdit,
+            onDismiss = viewModel::cancelEdit
+        )
+    }
+
+    if (uiState.showDeleteConfirm && place != null) {
+        DeletePlaceDialog(
+            placeName = place.name,
+            isDeleting = uiState.isDeleting,
+            onConfirm = viewModel::confirmDelete,
+            onDismiss = viewModel::dismissDelete
+        )
+    }
+
+    if (uiState.showReportDialog) {
+        ReportPlaceDialog(
+            isSending = uiState.isReporting,
+            error = uiState.reportError,
+            onSubmit = viewModel::submitReport,
+            onDismiss = viewModel::dismissReport
+        )
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            when {
+                uiState.isLoading -> Box(modifier = Modifier.weight(1f).fillMaxWidth().statusBarsPadding(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+                place == null -> Column(
+                    modifier = Modifier.weight(1f).fillMaxWidth().statusBarsPadding(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Row(modifier = Modifier.fillMaxWidth().padding(8.dp)) {
+                        IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад") }
+                    }
+                    Text(
+                        text = "Місце не знайдено",
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(24.dp)
+                    )
+                }
+                else -> {
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState())
+                    ) {
+                        PhotoHeader(
+                            place = place,
+                            photoUrl = uiState.latestPhoto?.url,
+                            isFavorite = uiState.isFavorite,
+                            onBack = onBack,
+                            onToggleFavorite = viewModel::toggleFavorite
                         )
 
-                        FlowRow(
-                            modifier = Modifier.padding(top = 10.dp),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                            itemVerticalAlignment = Alignment.CenterVertically
-                        ) {
-                            CategoryChip(category = place.category, showIcon = false)
-                            if (place.rating != null) {
-                                RatingRow(rating = place.rating, reviewCount = place.reviewCount)
-                            } else {
+                        Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                            Text(
+                                text = place.name,
+                                style = MaterialTheme.typography.headlineSmall,
+                                modifier = Modifier.padding(top = 16.dp)
+                            )
+
+                            FlowRow(
+                                modifier = Modifier.padding(top = 10.dp),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                                itemVerticalAlignment = Alignment.CenterVertically
+                            ) {
+                                CategoryChip(category = place.category, showIcon = false)
+                                if (place.rating != null) {
+                                    RatingRow(rating = place.rating, reviewCount = place.reviewCount)
+                                } else {
+                                    Text(
+                                        text = "Ще немає відгуків",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                StatusBadge(status = place.status)
+                                if (place.isUserAdded) {
+                                    Text(
+                                        text = if (uiState.isOwnPlace) "Додано вами" else "Додано користувачем",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+
+                            Row(modifier = Modifier.padding(top = 14.dp), verticalAlignment = Alignment.Top) {
+                                Icon(
+                                    Icons.Outlined.LocationOn,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(20.dp)
+                                )
                                 Text(
-                                    text = "Ще немає відгуків",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    text = place.address.ifBlank { "Адресу не вказано" },
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(start = 8.dp)
                                 )
                             }
-                            StatusBadge(status = place.status)
-                        }
 
-                        Row(modifier = Modifier.padding(top = 14.dp), verticalAlignment = Alignment.Top) {
-                            Icon(
-                                Icons.Outlined.LocationOn,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(20.dp)
-                            )
+                            AccessibilityTiles(place = place, modifier = Modifier.padding(top = 18.dp))
+
                             Text(
-                                text = place.address.ifBlank { "Адресу не вказано" },
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(start = 8.dp)
+                                text = "Додаткова інформація",
+                                style = MaterialTheme.typography.titleMedium,
+                                modifier = Modifier.padding(top = 24.dp, bottom = 4.dp)
                             )
-                        }
+                            AdditionalInfo(place = place)
 
-                        AccessibilityTiles(place = place, modifier = Modifier.padding(top = 18.dp))
-
-                        Text(
-                            text = "Додаткова інформація",
-                            style = MaterialTheme.typography.titleMedium,
-                            modifier = Modifier.padding(top = 24.dp, bottom = 4.dp)
-                        )
-                        AdditionalInfo(place = place)
-
-                        Column(
-                            verticalArrangement = Arrangement.spacedBy(10.dp),
-                            modifier = Modifier.padding(top = 20.dp, bottom = 20.dp)
-                        ) {
-                            SecondaryButton(
-                                text = "Пройти перевірку",
-                                icon = Icons.Filled.PlaylistAddCheck,
-                                onClick = onOpenQuickCheck
-                            )
-                            if (uiState.canAddPhoto) {
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy(10.dp),
+                                modifier = Modifier.padding(top = 20.dp, bottom = 20.dp)
+                            ) {
                                 SecondaryButton(
-                                    text = "Додати фото",
-                                    icon = Icons.Filled.AddAPhoto,
-                                    onClick = onOpenPhotoUpload
+                                    text = "Пройти перевірку",
+                                    icon = Icons.Filled.PlaylistAddCheck,
+                                    onClick = onOpenQuickCheck
                                 )
+                                if (uiState.canAddPhoto) {
+                                    SecondaryButton(
+                                        text = "Додати фото",
+                                        icon = Icons.Filled.AddAPhoto,
+                                        onClick = onOpenPhotoUpload
+                                    )
+                                }
+                                if (uiState.isOwnPlace) {
+                                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                        SecondaryButton(
+                                            text = "Змінити",
+                                            icon = Icons.Filled.Edit,
+                                            onClick = viewModel::startEdit,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        SecondaryButton(
+                                            text = "Видалити",
+                                            icon = Icons.Filled.Delete,
+                                            onClick = viewModel::requestDelete,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                    }
+                                }
+                                if (uiState.canReport) {
+                                    SecondaryButton(
+                                        text = if (uiState.hasReported) "Скаргу надіслано" else "Поскаржитися",
+                                        icon = Icons.Filled.Flag,
+                                        onClick = viewModel::requestReport
+                                    )
+                                }
                             }
                         }
                     }
-                }
 
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.background)
-                        .navigationBarsPadding()
-                        .padding(horizontal = 16.dp, vertical = 12.dp)
-                ) {
-                    PrimaryButton(text = "Будувати маршрут", icon = Icons.Filled.Directions, onClick = onOpenRoute)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.background)
+                            .navigationBarsPadding()
+                            .padding(horizontal = 16.dp, vertical = 12.dp)
+                    ) {
+                        PrimaryButton(text = "Будувати маршрут", icon = Icons.Filled.Directions, onClick = onOpenRoute)
+                    }
                 }
             }
         }
+
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 80.dp)
+        )
     }
 }
 
