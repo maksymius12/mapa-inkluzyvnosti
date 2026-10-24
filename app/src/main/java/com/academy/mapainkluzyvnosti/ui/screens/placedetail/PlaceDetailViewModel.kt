@@ -6,6 +6,7 @@ import com.academy.mapainkluzyvnosti.data.model.AppUser
 import com.academy.mapainkluzyvnosti.data.model.Place
 import com.academy.mapainkluzyvnosti.data.model.UserAgeGroup
 import com.academy.mapainkluzyvnosti.data.remote.dto.PlacePhotoDto
+import com.academy.mapainkluzyvnosti.data.remote.toSaveErrorMessage
 import com.academy.mapainkluzyvnosti.data.remote.toUserMessage
 import com.academy.mapainkluzyvnosti.data.repository.FavoriteRepository
 import com.academy.mapainkluzyvnosti.data.repository.PlaceReportReason
@@ -75,9 +76,10 @@ class PlaceDetailViewModel(
         _uiState.update { it.copy(showDemoGate = false) }
     }
 
-    fun load() {
+    /** [showSpinner] = false — тихе оновлення (повернення з перевірки, відновлення мережі) без миготіння екрана. */
+    fun load(showSpinner: Boolean = true) {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+            _uiState.update { it.copy(isLoading = showSpinner || it.place == null, errorMessage = null) }
             runCatching {
                 val place = placeRepository.getPlaceById(placeId)
                 val photo = placeRepository.getLatestPhoto(placeId)
@@ -140,7 +142,7 @@ class PlaceDetailViewModel(
                 }
                 .onFailure { e ->
                     _uiState.update {
-                        it.copy(isSaving = false, editError = e.toUserMessage("Не вдалося зберегти зміни. Спробуйте ще раз"))
+                        it.copy(isSaving = false, editError = e.toSaveErrorMessage())
                     }
                 }
         }

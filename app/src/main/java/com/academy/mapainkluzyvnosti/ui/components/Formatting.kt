@@ -21,3 +21,10 @@ fun reviewsLabel(count: Int): String {
 fun formatDistanceKm(meters: Double): String = String.format(Locale.US, "%.1f км", meters / 1000)
 
 fun formatDurationMinutes(seconds: Double): String = "${maxOf(1, (seconds / 60).toInt())} хв"
+
+/** «2026-10-24T10:58:15.55+00:00» -> «24.10.2026» (місцевий час); null, якщо дату не розібрати. */
+fun formatCheckDate(iso: String): String? = runCatching {
+    java.time.OffsetDateTime.parse(iso)
+        .atZoneSameInstant(java.time.ZoneId.systemDefault())
+        .format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy"))
+}.getOrNull()

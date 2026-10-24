@@ -88,6 +88,7 @@ class MapViewModel(
 
     /** Список місць і активних SOS не повинен переживати довше одного показу екрана — свіжий запит щоразу. */
     fun refresh() {
+        if (_districtBoundary.value.isEmpty()) loadDistrictBoundary()
         loadPlaces()
         loadSosRequests()
     }

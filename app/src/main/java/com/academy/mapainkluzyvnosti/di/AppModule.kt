@@ -1,5 +1,6 @@
 package com.academy.mapainkluzyvnosti.di
 
+import com.academy.mapainkluzyvnosti.data.local.NetworkMonitor
 import com.academy.mapainkluzyvnosti.data.remote.NominatimApi
 import com.academy.mapainkluzyvnosti.data.remote.OsrmApi
 import com.academy.mapainkluzyvnosti.data.remote.OverpassApi
@@ -50,6 +51,7 @@ val networkModule = module {
     single { NominatimApi(get()) }
     single { OverpassApi(get()) }
     single { OsrmApi(get()) }
+    single { NetworkMonitor(get()) }
 }
 
 val repositoryModule = module {

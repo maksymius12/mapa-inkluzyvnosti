@@ -5,11 +5,14 @@ import com.academy.mapainkluzyvnosti.data.model.PLACE_SOURCE_USER
 import com.academy.mapainkluzyvnosti.data.model.Place
 import com.academy.mapainkluzyvnosti.data.model.PlaceCategory
 import com.academy.mapainkluzyvnosti.data.remote.dto.CreatedPlaceDto
+import com.academy.mapainkluzyvnosti.data.remote.dto.CreatedPlaceIdDto
 import com.academy.mapainkluzyvnosti.data.remote.dto.PlaceReportInsertDto
 import com.academy.mapainkluzyvnosti.data.remote.dto.PlaceReportReadDto
 import com.academy.mapainkluzyvnosti.data.remote.dto.UserPlaceInsertDto
 import com.academy.mapainkluzyvnosti.data.remote.dto.wktPoint
 import com.academy.mapainkluzyvnosti.domain.usecase.PlaceInputRules
+import com.academy.mapainkluzyvnosti.data.remote.NothingUpdatedException
+import com.academy.mapainkluzyvnosti.data.remote.SupabaseErrorLog
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.exception.PostgrestRestException
@@ -91,28 +94,62 @@ class UserPlaceRepository(
             "source=$source created_by_matches_session=${createdBy == client.auth.currentUserOrNull()?.id} " +
             "store_user_matches_session=${storeUserId == createdBy}"
 
+    /**
+     * Зміна назви/категорії/адреси власного місця. RLS і тригер places_before_update дозволяють це лише
+     * автору; якщо PATCH не зачепив жодного рядка (немає прав, місце приховане чи видалене) —
+     * NothingUpdatedException, а не тихе «збережено».
+     */
     suspend fun updatePlace(placeId: String, name: String, category: PlaceCategory, address: String) {
-        client.postgrest.from("places").update({
-            set("name", PlaceInputRules.normalize(name))
-            set("category", category)
-            set("address", PlaceInputRules.normalize(address))
-        }) { filter { eq("id", placeId) } }
+        val fields = mapOf(
+            "id" to placeId,
+            "name_length" to PlaceInputRules.normalize(name).length,
+            "category" to category,
+            "address_length" to PlaceInputRules.normalize(address).length
+        )
+        val updated = try {
+            client.postgrest.from("places").update({
+                set("name", PlaceInputRules.normalize(name))
+                set("category", category)
+                set("address", PlaceInputRules.normalize(address))
+            }) {
+                select(Columns.list("id"))
+                filter { eq("id", placeId) }
+            }.decodeList<CreatedPlaceIdDto>()
+        } catch (e: Exception) {
+            SupabaseErrorLog.log("PATCH /rest/v1/places", e, fields)
+            throw e
+        }
+        if (updated.isEmpty()) {
+            val e = NothingUpdatedException("PATCH /rest/v1/places")
+            SupabaseErrorLog.log("PATCH /rest/v1/places", e, fields)
+            throw e
+        }
     }
 
     /** Видалення разом із перевірками/фото/відгуками — через RPC, бо FK цих таблиць без каскаду. */
     suspend fun deletePlace(placeId: String) {
-        client.postgrest.rpc("delete_own_place", buildJsonObject { put("p_place_id", placeId) })
+        try {
+            client.postgrest.rpc("delete_own_place", buildJsonObject { put("p_place_id", placeId) })
+        } catch (e: Exception) {
+            SupabaseErrorLog.log("POST /rest/v1/rpc/delete_own_place", e, mapOf("p_place_id" to placeId))
+            throw e
+        }
     }
 
     suspend fun reportPlace(placeId: String, reporterId: String, reason: PlaceReportReason, comment: String?) {
-        client.postgrest.from("place_reports").insert(
-            PlaceReportInsertDto(
-                placeId = placeId,
-                reporterId = reporterId,
-                reason = reason.code,
-                comment = comment?.let(PlaceInputRules::normalize)?.takeIf { it.isNotEmpty() }
+        try {
+            client.postgrest.from("place_reports").insert(
+                PlaceReportInsertDto(
+                    placeId = placeId,
+                    reporterId = reporterId,
+                    reason = reason.code,
+                    comment = comment?.let(PlaceInputRules::normalize)?.takeIf { it.isNotEmpty() }
+                )
             )
-        )
+        } catch (e: Exception) {
+            SupabaseErrorLog.log("POST /rest/v1/place_reports", e, mapOf("place_id" to placeId, "reason" to reason.code))
+            throw e
+        }
     }
 
     /** RLS віддає користувачу лише його власні скарги. */

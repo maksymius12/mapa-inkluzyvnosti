@@ -43,6 +43,7 @@ import com.academy.mapainkluzyvnosti.ui.components.ScreenHeader
 import com.academy.mapainkluzyvnosti.ui.components.formatDistanceKm
 import com.academy.mapainkluzyvnosti.ui.components.formatDurationMinutes
 import com.academy.mapainkluzyvnosti.ui.navigation.Routes
+import com.academy.mapainkluzyvnosti.ui.components.OnReconnected
 import org.koin.compose.viewmodel.koinViewModel
 
 /** Екран 6: обране. Вкладки «Місця» і «Маршрути». */
@@ -54,6 +55,7 @@ fun FavoritesScreen(
     viewModel: FavoritesViewModel = koinViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    OnReconnected { viewModel.loadFavoritePlaces() }
     var selectedTab by rememberSaveable(initialTab) {
         mutableIntStateOf(if (initialTab == Routes.FAVORITES_TAB_ROUTES) 1 else 0)
     }

@@ -2,6 +2,7 @@ package com.academy.mapainkluzyvnosti.data.model
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 
 @Serializable
 data class CheckResult(
@@ -13,5 +14,7 @@ data class CheckResult(
     val tactile: Boolean,
     @SerialName("staff_assistance") val staffAssistance: Boolean,
     /** Додатковий атрибут: у розрахунок статусу за 7 критеріями не входить. */
-    @SerialName("accessible_parking") val accessibleParking: Boolean = false
+    @SerialName("accessible_parking") val accessibleParking: Boolean = false,
+    /** Коли перевірку збережено (ISO-8601 з бази); для підпису «Перевірено …», не серіалізується. */
+    @Transient val checkedAt: String? = null
 )

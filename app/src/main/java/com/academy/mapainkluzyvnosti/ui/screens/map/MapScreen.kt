@@ -65,6 +65,7 @@ import com.academy.mapainkluzyvnosti.data.model.GeoPoint
 import com.academy.mapainkluzyvnosti.data.model.Place
 import com.academy.mapainkluzyvnosti.data.model.markerType
 import com.academy.mapainkluzyvnosti.ui.components.DemoGateDialog
+import com.academy.mapainkluzyvnosti.ui.components.OnReconnected
 import com.academy.mapainkluzyvnosti.ui.components.MapaCard
 import com.academy.mapainkluzyvnosti.ui.components.MapaChip
 import com.academy.mapainkluzyvnosti.ui.components.OpenDataTag
@@ -117,6 +118,8 @@ fun MapScreen(
     addPlaceViewModel: AddPlaceViewModel = koinViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    // Зв'язок відновився — свіжі місця, SOS і межа району.
+    OnReconnected { viewModel.refresh() }
     val addState by addPlaceViewModel.uiState.collectAsState()
     val isVolunteer by viewModel.isVolunteer.collectAsState()
     val selection by viewModel.filterSelection.collectAsState()

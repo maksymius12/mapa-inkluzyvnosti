@@ -21,6 +21,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
+import com.academy.mapainkluzyvnosti.ui.components.NetworkAwareContent
 import com.academy.mapainkluzyvnosti.ui.navigation.MapaNavHost
 import com.academy.mapainkluzyvnosti.ui.state.AppStartup
 import com.academy.mapainkluzyvnosti.ui.state.SettingsStore
@@ -65,15 +66,18 @@ class MainActivity : ComponentActivity() {
             LaunchedEffect(Unit) { startRoute = startup.resolveStartRoute() }
 
             MapaInkluzyvnostiTheme(darkTheme = isDarkTheme, largeText = settings.isLargeText) {
-                val route = startRoute
-                if (route == null) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(if (isDarkTheme) ComposeColor(Background.value) else ComposeColor(LightBackground.value))
-                    )
-                } else {
-                    MapaNavHost(startRoute = route)
+                // «Ви не в мережі» — поверх усієї навігації, включно з екранами входу.
+                NetworkAwareContent {
+                    val route = startRoute
+                    if (route == null) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(if (isDarkTheme) ComposeColor(Background.value) else ComposeColor(LightBackground.value))
+                        )
+                    } else {
+                        MapaNavHost(startRoute = route)
+                    }
                 }
             }
         }

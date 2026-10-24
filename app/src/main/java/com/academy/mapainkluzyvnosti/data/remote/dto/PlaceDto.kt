@@ -89,3 +89,7 @@ data class PlaceReportInsertDto(
 data class PlaceReportReadDto(
     @SerialName("place_id") val placeId: String
 )
+
+/** Відповідь PATCH з `select=id` — щоб відрізнити «оновлено» від «0 рядків» (RLS/тригер/місця немає). */
+@Serializable
+data class CreatedPlaceIdDto(val id: String)

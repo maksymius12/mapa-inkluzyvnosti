@@ -303,16 +303,6 @@ class AuthRepository(private val client: SupabaseClient) {
         }
     }
 
-    suspend fun incrementStudentProgress(userId: String, pointsDelta: Int) {
-        client.postgrest.rpc(
-            "increment_profile_progress",
-            buildJsonObject {
-                put("p_user_id", userId)
-                put("p_points_delta", pointsDelta)
-            }
-        )
-    }
-
     private fun ProfileDto.toDomain(email: String?) = AppUser(
         id = id,
         name = name?.takeIf { it.isNotBlank() } ?: suggestedDisplayName() ?: DEFAULT_NAME,

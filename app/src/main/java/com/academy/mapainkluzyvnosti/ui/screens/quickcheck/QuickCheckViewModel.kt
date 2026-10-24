@@ -2,9 +2,11 @@ package com.academy.mapainkluzyvnosti.ui.screens.quickcheck
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.academy.mapainkluzyvnosti.data.remote.toSaveErrorMessage
 import com.academy.mapainkluzyvnosti.data.model.UserAgeGroup
 import com.academy.mapainkluzyvnosti.data.repository.AuthRepository
 import com.academy.mapainkluzyvnosti.data.repository.CheckRepository
+import com.academy.mapainkluzyvnosti.data.repository.ProfileStatus
 import com.academy.mapainkluzyvnosti.data.repository.PlaceRepository
 import com.academy.mapainkluzyvnosti.domain.usecase.ComputeAccessStatus
 import com.academy.mapainkluzyvnosti.ui.components.QuickCheckState
@@ -16,8 +18,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-private const val POINTS_PER_CHECK = 10
-
 data class QuickCheckUiState(
     val form: QuickCheckState = QuickCheckState(),
     val isSubmitting: Boolean = false,
@@ -26,6 +26,11 @@ data class QuickCheckUiState(
     val showDemoGate: Boolean = false
 )
 
+/**
+ * Перевірка за 7 критеріями: може пройти будь-який авторизований користувач для будь-якого місця
+ * (своє, чуже, OSM, відкриті дані). Записує лише рядок у checks; статус місця, паркування й бали учня
+ * перераховує серверний тригер — права на зміну назви чи категорії місця для цього не потрібні.
+ */
 class QuickCheckViewModel(
     private val placeId: String,
     private val checkRepository: CheckRepository,
@@ -39,7 +44,7 @@ class QuickCheckViewModel(
     val uiState: StateFlow<QuickCheckUiState> = _uiState.asStateFlow()
 
     fun onFormChange(form: QuickCheckState) {
-        _uiState.update { it.copy(form = form) }
+        _uiState.update { it.copy(form = form, errorMessage = null) }
     }
 
     fun dismissDemoGate() {
@@ -51,28 +56,33 @@ class QuickCheckViewModel(
             _uiState.update { it.copy(showDemoGate = true) }
             return
         }
-        val userId = currentUserStore.user.value?.id ?: return
+        val userId = currentUserStore.user.value?.id
+        if (userId == null) {
+            _uiState.update { it.copy(showDemoGate = true) }
+            return
+        }
+        if (_uiState.value.isSubmitting) return
         val form = _uiState.value.form
         viewModelScope.launch {
             _uiState.update { it.copy(isSubmitting = true, errorMessage = null) }
+            val checkResult = form.toCheckResult()
             runCatching {
-                val checkResult = form.toCheckResult()
                 checkRepository.submitCheck(placeId, userId, checkResult, form.comment.ifBlank { null })
-
-                val computedStatus = ComputeAccessStatus(checkResult)
-                val latestPhoto = placeRepository.getLatestPhoto(placeId)
-                val finalStatus = ComputeAccessStatus.combineWithAiStatus(computedStatus, latestPhoto?.aiSuggestedStatus)
-                placeRepository.updatePlaceStatus(placeId, finalStatus)
-                placeRepository.updateAccessibleParking(placeId, checkResult.accessibleParking)
-
-                val user = currentUserStore.user.value
-                if (user?.ageGroup == UserAgeGroup.STUDENT) {
-                    authRepository.incrementStudentProgress(userId, POINTS_PER_CHECK)
-                }
             }.onSuccess {
+                // Запасний шлях для бази без тригера checks_after_insert_apply. З тригером — повторює те саме;
+                // помилки тут лише логуються, бо перевірку вже збережено.
+                val computedStatus = ComputeAccessStatus(checkResult)
+                val latestPhoto = runCatching { placeRepository.getLatestPhoto(placeId) }.getOrNull()
+                val finalStatus = ComputeAccessStatus.combineWithAiStatus(computedStatus, latestPhoto?.aiSuggestedStatus)
+                placeRepository.applyCheckToPlaceFallback(placeId, finalStatus, checkResult.accessibleParking)
+                // Бали учня нараховує сервер — підтягуємо оновлений профіль, щоб «Профіль» показав їх одразу.
+                if (currentUserStore.user.value?.ageGroup == UserAgeGroup.STUDENT) {
+                    (runCatching { authRepository.loadProfileStatus() }.getOrNull() as? ProfileStatus.Ready)
+                        ?.let { currentUserStore.set(it.user) }
+                }
                 _uiState.update { it.copy(isSubmitting = false, isSubmitted = true) }
             }.onFailure { e ->
-                _uiState.update { it.copy(isSubmitting = false, errorMessage = e.message ?: "Не вдалося зберегти перевірку") }
+                _uiState.update { it.copy(isSubmitting = false, errorMessage = e.toSaveErrorMessage()) }
             }
         }
     }

@@ -2,6 +2,7 @@ package com.academy.mapainkluzyvnosti.data.repository
 
 import com.academy.mapainkluzyvnosti.data.model.AccessStatus
 import com.academy.mapainkluzyvnosti.data.model.Place
+import com.academy.mapainkluzyvnosti.data.remote.SupabaseErrorLog
 import com.academy.mapainkluzyvnosti.data.remote.dto.AnalyzePlacePhotoRequest
 import com.academy.mapainkluzyvnosti.data.remote.dto.AnalyzePlacePhotoResponse
 import com.academy.mapainkluzyvnosti.data.remote.dto.CheckDto
@@ -93,16 +94,23 @@ class PlaceRepository(private val client: SupabaseClient) {
         client.postgrest.from("places").upsert(places)
     }
 
-    suspend fun updatePlaceStatus(placeId: String, status: AccessStatus) {
-        client.postgrest.from("places").update({
-            set("status", status)
-        }) { filter { eq("id", placeId) } }
-    }
-
-    suspend fun updateAccessibleParking(placeId: String, hasAccessibleParking: Boolean) {
-        client.postgrest.from("places").update({
-            set("has_accessible_parking", hasAccessibleParking)
-        }) { filter { eq("id", placeId) } }
+    /**
+     * Запасний шлях для бази без тригера checks_after_insert_apply: статус і паркування з клієнта.
+     * Помилки лише логуються — сама перевірка вже збережена, а з тригером сервер робить це сам.
+     */
+    suspend fun applyCheckToPlaceFallback(placeId: String, status: AccessStatus, hasAccessibleParking: Boolean) {
+        try {
+            client.postgrest.from("places").update({
+                set("status", status)
+                set("has_accessible_parking", hasAccessibleParking)
+            }) { filter { eq("id", placeId) } }
+        } catch (e: Exception) {
+            SupabaseErrorLog.log(
+                "PATCH /rest/v1/places (status after check)",
+                e,
+                mapOf("id" to placeId, "status" to status, "has_accessible_parking" to hasAccessibleParking)
+            )
+        }
     }
 
     suspend fun uploadPlacePhoto(placeId: String, userId: String, bytes: ByteArray, fileExtension: String): PlacePhotoDto {

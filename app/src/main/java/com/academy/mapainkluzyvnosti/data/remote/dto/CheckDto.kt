@@ -29,7 +29,8 @@ fun CheckDto.toDomainCheckResult() = CheckResult(
     toilet = toilet,
     tactile = tactile,
     staffAssistance = staffAssistance,
-    accessibleParking = accessibleParking == true
+    accessibleParking = accessibleParking == true,
+    checkedAt = createdAt
 )
 
 fun CheckResult.toDto(placeId: String, userId: String, comment: String? = null) = CheckDto(

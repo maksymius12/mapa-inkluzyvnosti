@@ -65,6 +65,8 @@ import com.academy.mapainkluzyvnosti.data.model.Place
 import com.academy.mapainkluzyvnosti.ui.components.AccessibilityTypeBadge
 import com.academy.mapainkluzyvnosti.ui.components.CategoryChip
 import com.academy.mapainkluzyvnosti.ui.components.DemoGateDialog
+import com.academy.mapainkluzyvnosti.ui.components.OnReconnected
+import com.academy.mapainkluzyvnosti.ui.components.formatCheckDate
 import com.academy.mapainkluzyvnosti.ui.components.OpenDataSourceNote
 import com.academy.mapainkluzyvnosti.ui.components.OpenDataTag
 import com.academy.mapainkluzyvnosti.ui.components.PrimaryButton
@@ -91,6 +93,7 @@ fun PlaceDetailScreen(
     viewModel: PlaceDetailViewModel = koinViewModel(parameters = { parametersOf(placeId) })
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    OnReconnected { viewModel.load(showSpinner = false) }
     val place = uiState.place
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -99,6 +102,19 @@ fun PlaceDetailScreen(
     }
 
     // Після видалення власного місця повертаємось назад (мапа оновиться при поверненні).
+    // Повернення з перевірки за 7 критеріями чи фото — свіжі статус, опції й дата перевірки.
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
+        var firstResume = true
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                if (firstResume) firstResume = false else viewModel.load(showSpinner = false)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
     LaunchedEffect(uiState.isDeleted) {
         if (uiState.isDeleted) onBack()
     }
@@ -197,6 +213,13 @@ fun PlaceDetailScreen(
                                     )
                                 }
                                 StatusBadge(status = place.status)
+                                place.checks?.checkedAt?.let(::formatCheckDate)?.let { date ->
+                                    Text(
+                                        text = "Перевірено $date",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
                                 if (place.isOpenData) OpenDataTag()
                                 if (place.isUserAdded) {
                                     Text(
