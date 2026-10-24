@@ -41,7 +41,19 @@ import com.academy.mapainkluzyvnosti.ui.screens.search.SearchScreen
 import com.academy.mapainkluzyvnosti.ui.screens.settings.SettingsScreen
 import com.academy.mapainkluzyvnosti.ui.screens.sos.SosRequestScreen
 import com.academy.mapainkluzyvnosti.ui.screens.welcome.WelcomeScreen
+import com.academy.mapainkluzyvnosti.ui.screens.tutorial.TutorialScreen
 import com.academy.mapainkluzyvnosti.ui.state.AppStartup
+import com.academy.mapainkluzyvnosti.ui.state.TutorialCoordinator
+import com.academy.mapainkluzyvnosti.ui.state.TutorialMode
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
 @Composable
@@ -53,6 +65,8 @@ fun MapaNavHost(startRoute: String) {
     val showBottomBar = currentRoute in Routes.bottomNavRoutes
 
     fun goToLogin() = navController.navigate(Routes.LOGIN) { popUpTo(0) { inclusive = true } }
+
+    val koinTutorial = koinInject<TutorialCoordinator>()
 
     /** Після входу/реєстрації: мапа стає коренем стеку, екрани входу прибираються. */
     fun goToMapAfterAuth() {
@@ -159,6 +173,20 @@ fun MapaNavHost(startRoute: String) {
                     }
                 )
             }
+            composable(
+                route = Routes.TUTORIAL_PATTERN,
+                arguments = listOf(
+                    navArgument("mode") {
+                        type = NavType.StringType
+                        defaultValue = TutorialMode.FULL.name
+                    }
+                )
+            ) { entry ->
+                val mode = entry.arguments?.getString("mode")
+                    ?.let { name -> TutorialMode.entries.firstOrNull { it.name == name } }
+                    ?: TutorialMode.FULL
+                TutorialScreen(mode = mode, onFinished = { navController.popBackStack() })
+            }
             composable(Routes.ROLE_SETUP) {
                 RoleSetupScreen(
                     onDone = { goToMapAfterAuth() },
@@ -166,6 +194,43 @@ fun MapaNavHost(startRoute: String) {
                 )
             }
             composable(Routes.MAP) {
+                val tutorial = koinInject<TutorialCoordinator>()
+                val scope = rememberCoroutineScope()
+                var showRolesPrompt by remember { mutableStateOf(false) }
+                // Інструктаж — один раз після першої реєстрації/входу (чи гостьового входу);
+                // інакше — одноразова підказка перевірити підставлені мету й вік.
+                LaunchedEffect(Unit) {
+                    val pending = tutorial.pendingTutorial()
+                    if (pending != null) {
+                        navController.navigate(Routes.tutorial(pending)) { launchSingleTop = true }
+                    } else if (tutorial.shouldPromptRolesReview()) {
+                        showRolesPrompt = true
+                    }
+                }
+                if (showRolesPrompt) {
+                    val close = {
+                        showRolesPrompt = false
+                        scope.launch { tutorial.markRolesPromptShown() }
+                    }
+                    AlertDialog(
+                        onDismissRequest = { close() },
+                        title = { Text("Перевірте профіль") },
+                        text = {
+                            Text(
+                                "Мету користування й вікову категорію підставлено за замовчуванням. " +
+                                    "Від них залежать можливості — наприклад, фото місць додають лише дорослі. " +
+                                    "Перевірте їх у Налаштуваннях."
+                            )
+                        },
+                        confirmButton = {
+                            TextButton(onClick = {
+                                close()
+                                navController.navigate(Routes.SETTINGS)
+                            }) { Text("Відкрити Налаштування") }
+                        },
+                        dismissButton = { TextButton(onClick = { close() }) { Text("Пізніше") } }
+                    )
+                }
                 MapScreen(
                     onOpenPlace = { placeId -> navController.navigate(Routes.placeDetail(placeId)) },
                     onOpenSearch = { navController.navigate(Routes.SEARCH) },
@@ -208,13 +273,16 @@ fun MapaNavHost(startRoute: String) {
                     onOpenFavorites = { navController.navigate(Routes.favorites(Routes.FAVORITES_TAB_PLACES)) },
                     onOpenNotifications = { navController.navigate(Routes.NOTIFICATIONS) },
                     onOpenSettings = { navController.navigate(Routes.SETTINGS) },
-                    onOpenHelp = { navController.navigate(Routes.SOS_REQUEST) }
+                    onOpenHelp = { navController.navigate(Routes.SOS_REQUEST) },
+                    onOpenTutorial = { navController.navigate(Routes.tutorial(tutorialMode(koinTutorial))) },
+                    onSignedOut = { goToLogin() }
                 )
             }
             composable(Routes.SETTINGS) {
                 SettingsScreen(
                     onBack = { navController.popBackStack() },
-                    onSignedOut = { goToLogin() }
+                    onSignedOut = { goToLogin() },
+                    onOpenTutorial = { navController.navigate(Routes.tutorial(tutorialMode(koinTutorial))) }
                 )
             }
             composable(Routes.NOTIFICATIONS) {
@@ -273,3 +341,6 @@ private fun NavHostController.switchTab(route: String) {
         restoreState = true
     }
 }
+
+/** Повторний перегляд: гість бачить скорочену версію, акаунт — повну. */
+private fun tutorialMode(coordinator: TutorialCoordinator): TutorialMode = coordinator.currentMode

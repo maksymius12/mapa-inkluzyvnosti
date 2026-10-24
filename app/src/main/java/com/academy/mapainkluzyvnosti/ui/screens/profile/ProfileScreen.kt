@@ -16,6 +16,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.automirrored.outlined.MenuBook
+import androidx.compose.material.icons.outlined.Sos
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Person
@@ -50,6 +53,9 @@ import com.academy.mapainkluzyvnosti.BuildConfig
 import com.academy.mapainkluzyvnosti.data.model.UserAgeGroup
 import com.academy.mapainkluzyvnosti.data.model.UserPurposeRole
 import com.academy.mapainkluzyvnosti.ui.components.MapaCard
+import com.academy.mapainkluzyvnosti.ui.components.SecondaryButton
+import com.academy.mapainkluzyvnosti.ui.screens.settings.ageGroupLabel
+import com.academy.mapainkluzyvnosti.ui.screens.settings.purposeRoleLabel
 import com.academy.mapainkluzyvnosti.ui.theme.StatusPartial
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -61,18 +67,19 @@ fun ProfileScreen(
     onOpenNotifications: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenHelp: () -> Unit,
+    onOpenTutorial: () -> Unit,
+    onSignedOut: () -> Unit,
     viewModel: ProfileViewModel = koinViewModel()
 ) {
     val user by viewModel.currentUser.collectAsState()
     val isDemoMode by viewModel.isDemoMode.collectAsState()
     var showAbout by remember { mutableStateOf(false) }
+    var showHelp by remember { mutableStateOf(false) }
 
     val name = if (isDemoMode) "Гостьовий перегляд" else viewModel.displayName(user)
-    val subtitle = when {
-        isDemoMode -> null
-        user?.purposeRole == UserPurposeRole.VOLUNTEER -> "Волонтер"
-        else -> "Користувач"
-    }
+    // Мета й вікова категорія — з profiles (або підставлені, поки рядка немає).
+    val subtitle = user?.takeIf { !isDemoMode }?.let { "${purposeRoleLabel(it.purposeRole)} · ${ageGroupLabel(it.ageGroup)}" }
+    val email = if (isDemoMode) null else viewModel.email(user)
 
     Column(
         modifier = Modifier
@@ -92,6 +99,13 @@ fun ProfileScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+                email?.let {
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
             IconButton(onClick = onOpenSettings) {
                 Icon(Icons.Filled.Settings, contentDescription = "Налаштування", tint = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -105,8 +119,19 @@ fun ProfileScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 16.dp)
             )
-        } else if (user?.ageGroup == UserAgeGroup.STUDENT) {
-            GamificationBlock(points = user?.points ?: 0, checksCount = user?.checksCount ?: 0)
+        } else {
+            if (user?.rolesNeedReview == true) {
+                MapaCard(onClick = onOpenSettings, modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
+                    Text(
+                        text = "Мету користування й вікову категорію підставлено за замовчуванням. Перевірте їх у Налаштуваннях.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(16.dp)
+                    )
+                }
+            }
+            if (user?.ageGroup == UserAgeGroup.STUDENT) {
+                GamificationBlock(points = user?.points ?: 0, checksCount = user?.checksCount ?: 0)
+            }
         }
 
         Column(modifier = Modifier.padding(top = 24.dp)) {
@@ -114,9 +139,36 @@ fun ProfileScreen(
             MenuRow(Icons.Outlined.FavoriteBorder, "Обране", onOpenFavorites)
             MenuRow(Icons.Outlined.NotificationsNone, "Повідомлення", onOpenNotifications)
             MenuRow(Icons.Outlined.Settings, "Налаштування", onOpenSettings)
-            MenuRow(Icons.Outlined.HelpOutline, "Допомога", onOpenHelp)
+            MenuRow(Icons.Outlined.HelpOutline, "Допомога", { showHelp = true })
             MenuRow(Icons.Outlined.Info, "Про застосунок", { showAbout = true }, showDivider = false)
         }
+
+        SecondaryButton(
+            text = if (isDemoMode) "Вийти з гостьового режиму" else "Вийти",
+            icon = Icons.AutoMirrored.Filled.Logout,
+            onClick = { viewModel.signOut(onSignedOut) },
+            modifier = Modifier.padding(top = 24.dp)
+        )
+    }
+
+    if (showHelp) {
+        AlertDialog(
+            onDismissRequest = { showHelp = false },
+            title = { Text("Допомога") },
+            text = {
+                Column {
+                    MenuRow(Icons.AutoMirrored.Outlined.MenuBook, "Як користуватися", {
+                        showHelp = false
+                        onOpenTutorial()
+                    })
+                    MenuRow(Icons.Outlined.Sos, "Запит допомоги волонтерам", {
+                        showHelp = false
+                        onOpenHelp()
+                    }, showDivider = false)
+                }
+            },
+            confirmButton = { TextButton(onClick = { showHelp = false }) { Text("Закрити") } }
+        )
     }
 
     if (showAbout) {

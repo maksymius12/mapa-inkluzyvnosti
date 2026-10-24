@@ -31,18 +31,24 @@ class AppStartup(
 
     /** Відновлює профіль збереженої сесії; якщо після входу через Google не обрано мету й вік — крок вибору. */
     private suspend fun restoreCurrentUser(): String {
-        val userId = authRepository.currentUserId ?: return Routes.LOGIN
-        val displayName = authRepository.suggestedDisplayName() ?: DEFAULT_NAME
+        // Сесія може бути збереженою, але ще не оновленою (немає мережі) — беремо користувача з неї.
+        val storedUser = authRepository.storedSessionUser() ?: return Routes.LOGIN
+        val userId = storedUser.id
+        val displayName = authRepository.suggestedDisplayName()
+            ?: storedUser.email?.substringBefore('@')?.takeIf { it.isNotBlank() }
+            ?: DEFAULT_NAME
         when (val status = runCatching { authRepository.loadProfileStatus() }.getOrNull()) {
             is ProfileStatus.Ready -> currentUserStore.set(status.user)
             is ProfileStatus.NeedsRoles -> return Routes.ROLE_SETUP
-            // Без мережі профіль недоступний — тримаємо мінімального користувача, щоб екрани не вважали його гостем.
+            // Без мережі профіль недоступний — тримаємо мінімального користувача, щоб екрани не вважали його гостем;
+            // справжній профіль підтягне SessionSync, щойно сесія оновиться.
             null -> currentUserStore.set(
                 AppUser(
                     id = userId,
                     name = displayName,
                     purposeRole = UserPurposeRole.RESIDENT,
-                    ageGroup = UserAgeGroup.ADULT
+                    ageGroup = UserAgeGroup.ADULT,
+                    email = storedUser.email
                 )
             )
         }

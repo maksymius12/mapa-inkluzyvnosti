@@ -38,6 +38,9 @@ import com.academy.mapainkluzyvnosti.ui.state.FavoriteRoutesStore
 import com.academy.mapainkluzyvnosti.ui.state.MapFilterStore
 import com.academy.mapainkluzyvnosti.ui.state.SettingsStore
 import com.academy.mapainkluzyvnosti.ui.state.ThemeStore
+import com.academy.mapainkluzyvnosti.ui.state.SessionSync
+import com.academy.mapainkluzyvnosti.ui.state.TutorialCoordinator
+import com.academy.mapainkluzyvnosti.data.local.TutorialPreferences
 import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
 
@@ -71,6 +74,9 @@ val stateModule = module {
     single { AppStartup(get(), get(), get(), get()) }
     single { FavoriteRoutesStore(get()) }
     single { ThemeStore() }
+    single { TutorialPreferences(get()) }
+    single { TutorialCoordinator(get(), get(), get(), get()) }
+    single { SessionSync(get(), get(), get()) }
 }
 
 val viewModelModule = module {

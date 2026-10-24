@@ -65,11 +65,16 @@ class SettingsViewModel(
     fun setPurposeRole(role: UserPurposeRole) = saveRoles { it.copy(purposeRole = role) }
     fun setAgeGroup(group: UserAgeGroup) = saveRoles { it.copy(ageGroup = group) }
 
+    /** Підставлені значення правильні — зберегти їх як обрані (знімає підказку «перевірте»). */
+    fun confirmRoles() = saveRoles(force = true) { it }
+
     /** Мета й вікова категорія: одразу в інтерфейсі, потім у профіль; при помилці — повертаємо як було. */
-    private fun saveRoles(change: (AppUser) -> AppUser) {
+    private fun saveRoles(force: Boolean = false, change: (AppUser) -> AppUser) {
         val previous = currentUserStore.user.value ?: return
-        val updated = change(previous)
-        if (updated == previous || _dialogState.value.isSavingRoles) return
+        val updated = change(previous).copy(rolesNeedReview = false)
+        if ((!force && updated.purposeRole == previous.purposeRole && updated.ageGroup == previous.ageGroup) ||
+            _dialogState.value.isSavingRoles
+        ) return
         currentUserStore.set(updated)
         viewModelScope.launch {
             _dialogState.update { it.copy(isSavingRoles = true, rolesMessage = null) }

@@ -13,6 +13,7 @@ import io.github.jan.supabase.auth.providers.builtin.IDToken
 import io.github.jan.supabase.auth.status.SessionStatus
 import io.github.jan.supabase.auth.user.UserInfo
 import io.github.jan.supabase.functions.functions
+import io.github.jan.supabase.postgrest.exception.PostgrestRestException
 import io.github.jan.supabase.postgrest.postgrest
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
@@ -64,15 +65,27 @@ class AuthRepository(private val client: SupabaseClient) {
     val currentUserId: String? get() = client.auth.currentUserOrNull()?.id
 
     /**
-     * Чекає, поки Supabase відновить збережену сесію з диска, і каже, чи користувач уже ввійшов.
-     * Без мережі сесія лишається чинною локально, тож таймаут трактуємо як «немає сесії».
+     * Чекає, поки Supabase відновить збережену сесію з диска (supabase-kt зберігає її в SharedPreferences
+     * і сам оновлює токен), і каже, чи користувач увійшов. Якщо токен ще оновлюється або немає мережі
+     * (Initializing після таймауту / RefreshFailure), але сесія збережена, — користувач лишається
+     * увійденим; профіль підтягне SessionSync, щойно оновлення пройде.
      */
     suspend fun awaitRestoredSession(): Boolean {
         withTimeoutOrNull(SESSION_RESTORE_TIMEOUT_MS) {
             client.auth.sessionStatus.first { it !is SessionStatus.Initializing }
         }
-        return currentUserId != null
+        return when (client.auth.sessionStatus.value) {
+            is SessionStatus.Authenticated -> true
+            is SessionStatus.NotAuthenticated -> false
+            else -> storedSessionUser() != null
+        }
     }
+
+    /** Користувач зі збереженої сесії — доступний навіть до (або без) оновлення токена. */
+    suspend fun storedSessionUser(): UserInfo? =
+        client.auth.currentUserOrNull() ?: runCatching { client.auth.sessionManager.loadSessionOrNull()?.user }.getOrNull()
+
+    val currentEmail: String? get() = client.auth.currentUserOrNull()?.email
 
     /** Ім'я для відображення з реального акаунта: ПІБ із Google, інакше локальна частина email. */
     fun suggestedDisplayName(): String? {
@@ -158,8 +171,16 @@ class AuthRepository(private val client: SupabaseClient) {
         client.auth.verifyEmailOtp(type = OtpType.Email.RECOVERY, email = email, token = code)
     }
 
+    /**
+     * Вихід. Без мережі supabase-kt кидає виняток і НЕ очищає локальну сесію — тоді після перезапуску
+     * користувач знову виявився б увійденим. Тому локальну сесію прибираємо в будь-якому разі.
+     */
     suspend fun signOut() {
-        client.auth.signOut()
+        try {
+            client.auth.signOut()
+        } catch (e: Exception) {
+            runCatching { client.auth.clearSession() }
+        }
     }
 
     suspend fun updatePassword(newPassword: String) {
@@ -184,10 +205,10 @@ class AuthRepository(private val client: SupabaseClient) {
             .select { filter { eq("id", authUser.id) } }
             .decodeSingleOrNull<ProfileDto>()
         if (existing != null) {
-            return if (existing.rolesConfirmed) {
-                ProfileStatus.Ready(existing.toDomain())
+            return if (existing.rolesConfirmed != false) {
+                ProfileStatus.Ready(existing.toDomain(email = authUser.email))
             } else {
-                ProfileStatus.NeedsRoles(authUser.id, existing.name, profileExists = true)
+                ProfileStatus.NeedsRoles(authUser.id, existing.name ?: suggestedDisplayName() ?: DEFAULT_NAME, profileExists = true)
             }
         }
 
@@ -198,12 +219,16 @@ class AuthRepository(private val client: SupabaseClient) {
         if (metaRole == null && metaAge == null && authUser.isGoogleUser()) {
             return ProfileStatus.NeedsRoles(authUser.id, name, profileExists = false)
         }
+        // Рядка немає (тригер/backfill ще не виконано): не ламаємось, показуємо підставлені значення
+        // й один раз пропонуємо перевірити мету й вік у Налаштуваннях.
         return ProfileStatus.Ready(
             AppUser(
                 id = authUser.id,
                 name = name,
                 purposeRole = metaRole ?: UserPurposeRole.RESIDENT,
-                ageGroup = metaAge ?: UserAgeGroup.ADULT
+                ageGroup = metaAge ?: UserAgeGroup.ADULT,
+                email = authUser.email,
+                rolesNeedReview = metaRole == null || metaAge == null
             )
         )
     }
@@ -219,7 +244,7 @@ class AuthRepository(private val client: SupabaseClient) {
                 select()
                 filter { eq("id", status.userId) }
             }.decodeList<ProfileDto>()
-            updated.firstOrNull()?.let { return it.toDomain() }
+            updated.firstOrNull()?.let { return it.toDomain(email = currentEmail) }
         }
         // Рядка в profiles немає — зберігаємо вибір у метадані акаунта (не таблиця, RLS не діє);
         // loadProfileStatus прочитає їх при наступному вході й більше не питатиме.
@@ -229,7 +254,7 @@ class AuthRepository(private val client: SupabaseClient) {
                 put(META_AGE_GROUP, ageGroup.apiValue)
             }
         }
-        return AppUser(id = status.userId, name = status.name, purposeRole = purposeRole, ageGroup = ageGroup)
+        return AppUser(id = status.userId, name = status.name, purposeRole = purposeRole, ageGroup = ageGroup, email = currentEmail)
     }
 
     private fun UserInfo.isGoogleUser(): Boolean {
@@ -240,11 +265,42 @@ class AuthRepository(private val client: SupabaseClient) {
         return provider == "google" || "google" in providers || identities?.any { it.provider == "google" } == true
     }
 
+    /**
+     * Зміна мети й вікової категорії в Налаштуваннях. Також знімає позначку roles_defaulted.
+     * Якщо рядка в profiles немає (або колонок ще не додано міграцією), вибір зберігається
+     * в метаданих акаунта — loadProfileStatus прочитає його при наступному вході.
+     */
     suspend fun updateProfileRoles(userId: String, purposeRole: UserPurposeRole, ageGroup: UserAgeGroup) {
-        client.postgrest.from("profiles").update({
+        suspend fun update(withDefaultedFlag: Boolean) = client.postgrest.from("profiles").update({
             set("purpose_role", purposeRole)
             set("age_group", ageGroup)
-        }) { filter { eq("id", userId) } }
+            if (withDefaultedFlag) set("roles_defaulted", false)
+        }) {
+            select()
+            filter { eq("id", userId) }
+        }.decodeList<ProfileDto>()
+
+        val updated = try {
+            update(withDefaultedFlag = true)
+        } catch (e: PostgrestRestException) {
+            // PGRST204 — колонки roles_defaulted ще немає (міграцію 20261027 не виконано).
+            if (e.code == "PGRST204") update(withDefaultedFlag = false) else throw e
+        }
+        if (updated.isEmpty()) {
+            client.auth.updateUser {
+                data = buildJsonObject {
+                    put(META_PURPOSE_ROLE, purposeRole.apiValue)
+                    put(META_AGE_GROUP, ageGroup.apiValue)
+                }
+            }
+        }
+    }
+
+    /** Інструктаж переглянуто — щоб не показувати після перевстановлення. Помилки не критичні. */
+    suspend fun markOnboardingDone(userId: String) {
+        runCatching {
+            client.postgrest.from("profiles").update({ set("onboarding_done", true) }) { filter { eq("id", userId) } }
+        }
     }
 
     suspend fun incrementStudentProgress(userId: String, pointsDelta: Int) {
@@ -257,13 +313,16 @@ class AuthRepository(private val client: SupabaseClient) {
         )
     }
 
-    private fun ProfileDto.toDomain() = AppUser(
+    private fun ProfileDto.toDomain(email: String?) = AppUser(
         id = id,
-        name = name,
+        name = name?.takeIf { it.isNotBlank() } ?: suggestedDisplayName() ?: DEFAULT_NAME,
         purposeRole = purposeRole,
         ageGroup = ageGroup,
-        points = points,
-        checksCount = checksCount
+        points = points ?: 0,
+        checksCount = checksCount ?: 0,
+        email = email,
+        rolesNeedReview = rolesDefaulted == true,
+        onboardingDone = onboardingDone == true
     )
 }
 

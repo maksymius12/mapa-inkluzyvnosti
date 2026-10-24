@@ -45,7 +45,12 @@ import org.koin.compose.viewmodel.koinViewModel
 
 /** Налаштування: тема, сповіщення, розмір тексту, категорії за замовчуванням, керування акаунтом. */
 @Composable
-fun SettingsScreen(onBack: () -> Unit, onSignedOut: () -> Unit, viewModel: SettingsViewModel = koinViewModel()) {
+fun SettingsScreen(
+    onBack: () -> Unit,
+    onSignedOut: () -> Unit,
+    onOpenTutorial: () -> Unit,
+    viewModel: SettingsViewModel = koinViewModel()
+) {
     val isDarkTheme by viewModel.isDarkTheme.collectAsState()
     val isDemoMode by viewModel.isDemoMode.collectAsState()
     val settings by viewModel.settings.collectAsState()
@@ -90,6 +95,15 @@ fun SettingsScreen(onBack: () -> Unit, onSignedOut: () -> Unit, viewModel: Setti
                 )
             }
 
+            SectionTitle("Довідка")
+            MapaCard(modifier = Modifier.fillMaxWidth()) {
+                ClickableRow(
+                    title = "Як користуватися",
+                    subtitle = "Короткий інструктаж про мапу, пошук, маршрути й перевірки",
+                    onClick = onOpenTutorial
+                )
+            }
+
             SectionTitle("Мапа")
             MapaCard(modifier = Modifier.fillMaxWidth()) {
                 ClickableRow(
@@ -102,6 +116,13 @@ fun SettingsScreen(onBack: () -> Unit, onSignedOut: () -> Unit, viewModel: Setti
             val user = currentUser
             if (!isDemoMode && user != null) {
                 SectionTitle("Про вас")
+                if (user.rolesNeedReview) {
+                    Text(
+                        text = "Значення нижче підставлено за замовчуванням. Змініть їх або підтвердьте, якщо все правильно.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                }
                 MapaCard(modifier = Modifier.fillMaxWidth()) {
                     RoleAndAgeSelector(
                         purposeRole = user.purposeRole,
@@ -110,6 +131,14 @@ fun SettingsScreen(onBack: () -> Unit, onSignedOut: () -> Unit, viewModel: Setti
                         onAgeGroupChange = viewModel::setAgeGroup,
                         enabled = !dialogState.isSavingRoles,
                         modifier = Modifier.padding(16.dp)
+                    )
+                }
+                if (user.rolesNeedReview) {
+                    SecondaryButton(
+                        text = "Усе правильно",
+                        onClick = viewModel::confirmRoles,
+                        enabled = !dialogState.isSavingRoles,
+                        modifier = Modifier.padding(top = 8.dp)
                     )
                 }
                 dialogState.rolesMessage?.let { message ->

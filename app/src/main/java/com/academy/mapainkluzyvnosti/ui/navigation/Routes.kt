@@ -2,6 +2,7 @@ package com.academy.mapainkluzyvnosti.ui.navigation
 
 import android.net.Uri
 import com.academy.mapainkluzyvnosti.ui.screens.login.OtpPurpose
+import com.academy.mapainkluzyvnosti.ui.state.TutorialMode
 
 object Routes {
     const val WELCOME = "welcome"
@@ -9,6 +10,10 @@ object Routes {
     const val SIGN_UP = "sign_up"
     /** Один раз після першого входу через Google: мета користування й вікова категорія. */
     const val ROLE_SETUP = "role_setup"
+
+    /** Інструктаж «Як користуватися»: FULL — для акаунта, GUEST — скорочений для гостя. */
+    const val TUTORIAL_PATTERN = "tutorial?mode={mode}"
+    fun tutorial(mode: TutorialMode) = "tutorial?mode=${mode.name}"
 
     /** «Введіть код» з листа: підтвердження реєстрації або скидання пароля. */
     const val VERIFY_CODE_PATTERN = "verify_code/{purpose}?email={email}&send={send}"
