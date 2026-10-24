@@ -173,9 +173,10 @@ class AuthRepository(private val client: SupabaseClient) {
 
     /**
      * Профіль поточного користувача після входу. Нічого не питає в тих, хто вже має профіль.
-     * Якщо профілю немає (тригер ще не розгорнуто або акаунт старий), створює його з метаданих
-     * реєстрації чи зі значеннями за замовчуванням; лише для першого входу через Google
-     * просить обрати мету й вікову категорію.
+     * Рядок у profiles створює лише серверний тригер handle_new_user_profile — клієнт туди не пише
+     * (INSERT з клієнта відхиляла RLS, 403). Якщо рядка ще немає, профіль береться з метаданих
+     * акаунта чи значень за замовчуванням; лише для першого входу через Google без вибору в
+     * метаданих просимо обрати мету й вікову категорію.
      */
     suspend fun loadProfileStatus(): ProfileStatus {
         val authUser = client.auth.currentUserOrNull() ?: throw IllegalStateException("No signed-in user")
@@ -197,14 +198,14 @@ class AuthRepository(private val client: SupabaseClient) {
         if (metaRole == null && metaAge == null && authUser.isGoogleUser()) {
             return ProfileStatus.NeedsRoles(authUser.id, name, profileExists = false)
         }
-        val dto = ProfileDto(
-            id = authUser.id,
-            name = name,
-            purposeRole = metaRole ?: UserPurposeRole.RESIDENT,
-            ageGroup = metaAge ?: UserAgeGroup.ADULT
+        return ProfileStatus.Ready(
+            AppUser(
+                id = authUser.id,
+                name = name,
+                purposeRole = metaRole ?: UserPurposeRole.RESIDENT,
+                ageGroup = metaAge ?: UserAgeGroup.ADULT
+            )
         )
-        client.postgrest.from("profiles").insert(dto)
-        return ProfileStatus.Ready(dto.toDomain())
     }
 
     /** Зберігає вибір мети й вікової категорії з кроку 2 (перший вхід через Google). */
@@ -220,9 +221,15 @@ class AuthRepository(private val client: SupabaseClient) {
             }.decodeList<ProfileDto>()
             updated.firstOrNull()?.let { return it.toDomain() }
         }
-        val dto = ProfileDto(id = status.userId, name = status.name, purposeRole = purposeRole, ageGroup = ageGroup)
-        client.postgrest.from("profiles").insert(dto)
-        return dto.toDomain()
+        // Рядка в profiles немає — зберігаємо вибір у метадані акаунта (не таблиця, RLS не діє);
+        // loadProfileStatus прочитає їх при наступному вході й більше не питатиме.
+        client.auth.updateUser {
+            data = buildJsonObject {
+                put(META_PURPOSE_ROLE, purposeRole.apiValue)
+                put(META_AGE_GROUP, ageGroup.apiValue)
+            }
+        }
+        return AppUser(id = status.userId, name = status.name, purposeRole = purposeRole, ageGroup = ageGroup)
     }
 
     private fun UserInfo.isGoogleUser(): Boolean {

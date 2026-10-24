@@ -65,6 +65,8 @@ import com.academy.mapainkluzyvnosti.data.model.Place
 import com.academy.mapainkluzyvnosti.ui.components.AccessibilityTypeBadge
 import com.academy.mapainkluzyvnosti.ui.components.CategoryChip
 import com.academy.mapainkluzyvnosti.ui.components.DemoGateDialog
+import com.academy.mapainkluzyvnosti.ui.components.OpenDataSourceNote
+import com.academy.mapainkluzyvnosti.ui.components.OpenDataTag
 import com.academy.mapainkluzyvnosti.ui.components.PrimaryButton
 import com.academy.mapainkluzyvnosti.ui.components.RatingRow
 import com.academy.mapainkluzyvnosti.ui.components.SecondaryButton
@@ -195,6 +197,7 @@ fun PlaceDetailScreen(
                                     )
                                 }
                                 StatusBadge(status = place.status)
+                                if (place.isOpenData) OpenDataTag()
                                 if (place.isUserAdded) {
                                     Text(
                                         text = if (uiState.isOwnPlace) "Додано вами" else "Додано користувачем",
@@ -227,6 +230,10 @@ fun PlaceDetailScreen(
                                 modifier = Modifier.padding(top = 24.dp, bottom = 4.dp)
                             )
                             AdditionalInfo(place = place)
+
+                            if (place.isOpenData) {
+                                OpenDataSourceNote(place = place, modifier = Modifier.padding(top = 12.dp))
+                            }
 
                             Column(
                                 verticalArrangement = Arrangement.spacedBy(10.dp),

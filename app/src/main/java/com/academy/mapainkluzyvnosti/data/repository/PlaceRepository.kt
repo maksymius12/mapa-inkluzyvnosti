@@ -148,6 +148,7 @@ class PlaceRepository(private val client: SupabaseClient) {
         rating = rating,
         reviewCount = reviewCount,
         hasAccessibleParking = hasAccessibleParking,
-        createdBy = createdBy
+        createdBy = createdBy,
+        attribution = attribution
     )
 }

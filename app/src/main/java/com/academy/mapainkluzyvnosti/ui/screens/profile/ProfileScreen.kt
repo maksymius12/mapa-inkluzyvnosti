@@ -124,10 +124,22 @@ fun ProfileScreen(
             onDismissRequest = { showAbout = false },
             title = { Text("Мапа Інклюзивності") },
             text = {
-                Column {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                     Text(
                         text = "Мобільний застосунок, який допомагає людям з інвалідністю та іншим маломобільним групам знаходити доступні місця, будувати зручні маршрути та досліджувати Шевченківський район без бар'єрів.",
                         style = MaterialTheme.typography.bodyMedium
+                    )
+                    Text(
+                        text = "Джерела даних",
+                        style = MaterialTheme.typography.titleSmall,
+                        modifier = Modifier.padding(top = 16.dp)
+                    )
+                    Text(
+                        text = "• Мапа безбар'єрності: набір «Моніторинг та оцінка ступеня безбар'єрності об'єктів фізичного оточення для осіб з інвалідністю» (Мінрозвитку, ГО «ЛУН Місто»), data.gov.ua/dataset/38997a1f-2e86-4bd7-9054-cd9cd206d825. Ліцензія CC BY. Завантажено 24.10.2026.\n" +
+                            "• Карта: OpenFreeMap, © OpenMapTiles, © OpenStreetMap contributors (ODbL); межа району, пошук адрес і маршрути — дані OpenStreetMap.\n" +
+                            "• Перевірки за 7 критеріями й фото — від користувачів застосунку.",
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(top = 4.dp)
                     )
                     Text(
                         text = "Версія ${BuildConfig.VERSION_NAME}",

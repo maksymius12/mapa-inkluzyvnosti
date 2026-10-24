@@ -67,6 +67,7 @@ import com.academy.mapainkluzyvnosti.data.model.markerType
 import com.academy.mapainkluzyvnosti.ui.components.DemoGateDialog
 import com.academy.mapainkluzyvnosti.ui.components.MapaCard
 import com.academy.mapainkluzyvnosti.ui.components.MapaChip
+import com.academy.mapainkluzyvnosti.ui.components.OpenDataTag
 import com.academy.mapainkluzyvnosti.ui.components.PlaceThumbnail
 import com.academy.mapainkluzyvnosti.ui.components.PrimaryButton
 import com.academy.mapainkluzyvnosti.ui.components.RatingRow
@@ -612,6 +613,7 @@ private fun PlaceBottomCard(
                 modifier = Modifier.padding(top = 12.dp)
             ) {
                 StatusBadge(status = place.status)
+                if (place.isOpenData) OpenDataTag()
                 RatingRow(rating = place.rating)
                 place.markerType(activeTypes)?.let { type ->
                     Text(

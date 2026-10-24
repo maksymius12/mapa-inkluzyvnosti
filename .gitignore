@@ -23,3 +23,7 @@ secrets/
 supabase/.temp/
 supabase/.env
 design/
+
+# Великі файли відкритих даних для імпорту — не комітимо
+data/import/
+__pycache__/

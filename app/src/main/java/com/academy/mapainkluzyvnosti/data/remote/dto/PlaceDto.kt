@@ -24,7 +24,9 @@ data class PlaceReadDto(
     @SerialName("review_count") val reviewCount: Int = 0,
     @SerialName("has_accessible_parking") val hasAccessibleParking: Boolean = false,
     /** Автор користувацького місця (source = "user"); null — OSM або старі записи. */
-    @SerialName("created_by") val createdBy: String? = null
+    @SerialName("created_by") val createdBy: String? = null,
+    /** Підпис джерела для імпортованих відкритих даних (source = "open_data"). */
+    val attribution: String? = null
 )
 
 /**
@@ -58,6 +60,21 @@ data class UserPlaceInsertDto(
     val location: String,
     val source: String,
     @SerialName("created_by") val createdBy: String
+)
+
+/**
+ * Відповідь на INSERT нового місця — лише поля, які ставить сервер (id, статус тощо).
+ * Координати клієнт уже знає, тож відповідь не залежить від generated-колонок lat/lng.
+ */
+@Serializable
+data class CreatedPlaceDto(
+    val id: String,
+    val name: String,
+    val address: String? = null,
+    val category: PlaceCategory,
+    val status: AccessStatus,
+    val source: String,
+    @SerialName("created_by") val createdBy: String? = null
 )
 
 @Serializable

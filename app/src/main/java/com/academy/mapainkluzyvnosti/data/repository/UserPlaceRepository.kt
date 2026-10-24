@@ -1,16 +1,20 @@
 package com.academy.mapainkluzyvnosti.data.repository
 
+import android.util.Log
 import com.academy.mapainkluzyvnosti.data.model.PLACE_SOURCE_USER
 import com.academy.mapainkluzyvnosti.data.model.Place
 import com.academy.mapainkluzyvnosti.data.model.PlaceCategory
-import com.academy.mapainkluzyvnosti.data.remote.dto.PlaceReadDto
+import com.academy.mapainkluzyvnosti.data.remote.dto.CreatedPlaceDto
 import com.academy.mapainkluzyvnosti.data.remote.dto.PlaceReportInsertDto
 import com.academy.mapainkluzyvnosti.data.remote.dto.PlaceReportReadDto
 import com.academy.mapainkluzyvnosti.data.remote.dto.UserPlaceInsertDto
 import com.academy.mapainkluzyvnosti.data.remote.dto.wktPoint
 import com.academy.mapainkluzyvnosti.domain.usecase.PlaceInputRules
 import io.github.jan.supabase.SupabaseClient
+import io.github.jan.supabase.auth.auth
+import io.github.jan.supabase.postgrest.exception.PostgrestRestException
 import io.github.jan.supabase.postgrest.postgrest
+import io.github.jan.supabase.postgrest.query.Columns
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
@@ -27,6 +31,8 @@ enum class PlaceReportReason(val code: String, val label: String) {
  * Межі району, добовий ліміт, авторство й валідацію сервер перевіряє сам (тригери й RLS),
  * тут — лише запити.
  */
+private const val TAG = "UserPlaceRepository"
+
 class UserPlaceRepository(
     private val client: SupabaseClient,
     private val placeRepository: PlaceRepository
@@ -40,19 +46,50 @@ class UserPlaceRepository(
         lat: Double,
         lng: Double
     ): Place {
+        // Тригер places_before_insert вимагає created_by = auth.uid() — беремо id саме з сесії.
+        val sessionUserId = client.auth.currentUserOrNull()?.id ?: authorId
         val dto = UserPlaceInsertDto(
             name = PlaceInputRules.normalize(name),
             address = PlaceInputRules.normalize(address),
             category = category,
             location = wktPoint(lat, lng),
             source = PLACE_SOURCE_USER,
-            createdBy = authorId
+            createdBy = sessionUserId
         )
-        val created = client.postgrest.from("places")
-            .insert(dto) { select() }
-            .decodeSingle<PlaceReadDto>()
-        return with(placeRepository) { created.toDomain(latestCheck = null) }
+        val created = try {
+            client.postgrest.from("places")
+                .insert(dto) { select(Columns.list("id", "name", "address", "category", "status", "source", "created_by")) }
+                .decodeSingle<CreatedPlaceDto>()
+        } catch (e: PostgrestRestException) {
+            // Справжня причина відмови: коди MPxxx — перевірки тригера (межі району, ліміт, поля),
+            // 42501 — RLS, 22P02/23xxx — тип або обмеження колонки, PGRST204 — немає такої колонки.
+            Log.e(
+                TAG,
+                "POST /rest/v1/places -> HTTP ${e.statusCode} code=${e.code} message=${e.error} " +
+                    "details=${e.details} hint=${e.hint}; insert fields: ${dto.logFields(authorId)}"
+            )
+            throw e
+        }
+        return Place(
+            id = created.id,
+            name = created.name,
+            address = created.address.orEmpty(),
+            category = created.category,
+            lat = lat,
+            lng = lng,
+            status = created.status,
+            checks = null,
+            source = created.source,
+            verifiedNote = "",
+            createdBy = created.createdBy
+        )
     }
+
+    /** Поля INSERT для логу: без тексту назви/адреси, лише довжини. */
+    private fun UserPlaceInsertDto.logFields(storeUserId: String) =
+        "name(len=${name.length}) address(len=${address.length}) category=$category location=$location " +
+            "source=$source created_by_matches_session=${createdBy == client.auth.currentUserOrNull()?.id} " +
+            "store_user_matches_session=${storeUserId == createdBy}"
 
     suspend fun updatePlace(placeId: String, name: String, category: PlaceCategory, address: String) {
         client.postgrest.from("places").update({

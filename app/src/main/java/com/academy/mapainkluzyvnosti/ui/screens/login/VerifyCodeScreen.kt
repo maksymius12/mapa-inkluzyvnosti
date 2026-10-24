@@ -154,6 +154,14 @@ private fun EnterCodeContent(
         modifier = Modifier.padding(top = 24.dp)
     )
 
+    Text(
+        text = "Не бачите лист? Перевірте папку «Спам»",
+        style = MaterialTheme.typography.bodySmall,
+        textAlign = TextAlign.Center,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+    )
+
     uiState.codeError?.let { message ->
         Text(
             text = message,
