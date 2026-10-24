@@ -3,6 +3,9 @@ package com.academy.mapainkluzyvnosti.ui.screens.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.academy.mapainkluzyvnosti.data.model.AppUser
+import com.academy.mapainkluzyvnosti.data.model.UserAgeGroup
+import com.academy.mapainkluzyvnosti.data.model.UserPurposeRole
+import com.academy.mapainkluzyvnosti.data.remote.toUserMessage
 import com.academy.mapainkluzyvnosti.ui.components.CategoryGroup
 import com.academy.mapainkluzyvnosti.data.repository.AuthRepository
 import com.academy.mapainkluzyvnosti.ui.state.AppSettings
@@ -24,7 +27,9 @@ data class SettingsDialogState(
     val passwordChangeMessage: String? = null,
     val showDeleteAccountConfirm: Boolean = false,
     val isDeletingAccount: Boolean = false,
-    val deleteAccountError: String? = null
+    val deleteAccountError: String? = null,
+    val isSavingRoles: Boolean = false,
+    val rolesMessage: String? = null
 )
 
 class SettingsViewModel(
@@ -57,6 +62,28 @@ class SettingsViewModel(
     fun openCategoryPicker() = _dialogState.update { it.copy(showCategoryPicker = true) }
     fun dismissCategoryPicker() = _dialogState.update { it.copy(showCategoryPicker = false) }
 
+    fun setPurposeRole(role: UserPurposeRole) = saveRoles { it.copy(purposeRole = role) }
+    fun setAgeGroup(group: UserAgeGroup) = saveRoles { it.copy(ageGroup = group) }
+
+    /** Мета й вікова категорія: одразу в інтерфейсі, потім у профіль; при помилці — повертаємо як було. */
+    private fun saveRoles(change: (AppUser) -> AppUser) {
+        val previous = currentUserStore.user.value ?: return
+        val updated = change(previous)
+        if (updated == previous || _dialogState.value.isSavingRoles) return
+        currentUserStore.set(updated)
+        viewModelScope.launch {
+            _dialogState.update { it.copy(isSavingRoles = true, rolesMessage = null) }
+            runCatching { authRepository.updateProfileRoles(updated.id, updated.purposeRole, updated.ageGroup) }
+                .onSuccess { _dialogState.update { it.copy(isSavingRoles = false, rolesMessage = "Збережено") } }
+                .onFailure { e ->
+                    currentUserStore.set(previous)
+                    _dialogState.update {
+                        it.copy(isSavingRoles = false, rolesMessage = e.toUserMessage("Не вдалося зберегти. Спробуйте ще раз"))
+                    }
+                }
+        }
+    }
+
     fun openChangePassword() = _dialogState.update { it.copy(showChangePassword = true, newPassword = "", passwordChangeMessage = null) }
     fun dismissChangePassword() = _dialogState.update { it.copy(showChangePassword = false) }
     fun onNewPasswordChange(value: String) = _dialogState.update { it.copy(newPassword = value, passwordChangeMessage = null) }
@@ -76,7 +103,7 @@ class SettingsViewModel(
                     }
                 }
                 .onFailure { e ->
-                    _dialogState.update { it.copy(isChangingPassword = false, passwordChangeMessage = e.message ?: "Не вдалося змінити пароль") }
+                    _dialogState.update { it.copy(isChangingPassword = false, passwordChangeMessage = e.toUserMessage("Не вдалося змінити пароль")) }
                 }
         }
     }
@@ -94,7 +121,7 @@ class SettingsViewModel(
                     onDeleted()
                 }
                 .onFailure { e ->
-                    _dialogState.update { it.copy(isDeletingAccount = false, deleteAccountError = e.message ?: "Не вдалося видалити акаунт") }
+                    _dialogState.update { it.copy(isDeletingAccount = false, deleteAccountError = e.toUserMessage("Не вдалося видалити акаунт")) }
                 }
         }
     }

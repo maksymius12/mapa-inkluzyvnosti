@@ -2,41 +2,35 @@ package com.academy.mapainkluzyvnosti.ui.screens.login
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.academy.mapainkluzyvnosti.data.model.UserAgeGroup
-import com.academy.mapainkluzyvnosti.data.model.UserPurposeRole
+import com.academy.mapainkluzyvnosti.data.remote.toUserMessage
 import com.academy.mapainkluzyvnosti.data.repository.AuthRepository
+import com.academy.mapainkluzyvnosti.data.repository.ProfileStatus
 import com.academy.mapainkluzyvnosti.ui.state.CurrentUserStore
 import com.academy.mapainkluzyvnosti.ui.state.DemoModeStore
-import io.github.jan.supabase.auth.exception.AuthErrorCode
-import io.github.jan.supabase.auth.exception.AuthRestException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-enum class AuthFormMode { SIGN_IN, SIGN_UP }
+/** Куди вести після успішного входу. */
+enum class AuthDestination { MAP, ROLE_SETUP }
 
 data class LoginUiState(
-    val purposeRole: UserPurposeRole = UserPurposeRole.RESIDENT,
-    val ageGroup: UserAgeGroup = UserAgeGroup.ADULT,
-    val formMode: AuthFormMode = AuthFormMode.SIGN_IN,
     val email: String = "",
     val password: String = "",
-    val isPasswordVisible: Boolean = false,
     val emailError: String? = null,
     val passwordError: String? = null,
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
-    val isLoggedIn: Boolean = false,
+    val destination: AuthDestination? = null,
     val isForgotPasswordDialogOpen: Boolean = false,
     val forgotPasswordEmail: String = "",
     val isSendingResetEmail: Boolean = false,
     val resetPasswordMessage: String? = null
-) {
-    val formTitle: String get() = if (formMode == AuthFormMode.SIGN_IN) "Увійти" else "Зареєструватись"
-}
+)
 
+/** Вхід: email/пароль, Google, гість. Жодних питань про мету й вікову категорію. */
 class LoginViewModel(
     private val authRepository: AuthRepository,
     private val currentUserStore: CurrentUserStore,
@@ -46,18 +40,6 @@ class LoginViewModel(
     private val _uiState = MutableStateFlow(LoginUiState())
     val uiState: StateFlow<LoginUiState> = _uiState.asStateFlow()
 
-    fun setPurposeRole(role: UserPurposeRole) {
-        _uiState.update { it.copy(purposeRole = role) }
-    }
-
-    fun setAgeGroup(group: UserAgeGroup) {
-        _uiState.update { it.copy(ageGroup = group) }
-    }
-
-    fun setFormMode(mode: AuthFormMode) {
-        _uiState.update { it.copy(formMode = mode, errorMessage = null, emailError = null, passwordError = null) }
-    }
-
     fun onEmailChange(value: String) {
         _uiState.update { it.copy(email = value, emailError = null, errorMessage = null) }
     }
@@ -66,22 +48,16 @@ class LoginViewModel(
         _uiState.update { it.copy(password = value, passwordError = null, errorMessage = null) }
     }
 
-    fun togglePasswordVisibility() {
-        _uiState.update { it.copy(isPasswordVisible = !it.isPasswordVisible) }
-    }
-
     fun submitEmailForm() {
         val state = _uiState.value
-        val emailError = if (!state.email.contains("@")) "Введи коректний email" else null
-        val passwordError = if (state.password.length < 6) "Пароль має містити щонайменше 6 символів" else null
+        val email = state.email.trim()
+        val emailError = if (!isValidEmail(email)) "Введіть коректний email" else null
+        val passwordError = if (state.password.isEmpty()) "Введіть пароль" else null
         if (emailError != null || passwordError != null) {
             _uiState.update { it.copy(emailError = emailError, passwordError = passwordError) }
             return
         }
-        when (state.formMode) {
-            AuthFormMode.SIGN_IN -> launchSignIn { authRepository.signInWithEmail(state.email, state.password) }
-            AuthFormMode.SIGN_UP -> launchSignIn { authRepository.signUpWithEmail(state.email, state.password) }
-        }
+        launchSignIn { authRepository.signInWithEmail(email, state.password) }
     }
 
     fun signInWithGoogleIdToken(idToken: String) {
@@ -91,7 +67,11 @@ class LoginViewModel(
     /** Гостьовий режим — локальний прапорець, без жодного звернення до Supabase Auth. */
     fun continueAsGuest() {
         demoModeStore.enable()
-        _uiState.update { it.copy(isLoggedIn = true) }
+        _uiState.update { it.copy(destination = AuthDestination.MAP) }
+    }
+
+    fun consumeDestination() {
+        _uiState.update { it.copy(destination = null) }
     }
 
     fun openForgotPasswordDialog() {
@@ -107,8 +87,8 @@ class LoginViewModel(
     }
 
     fun sendPasswordReset() {
-        val email = _uiState.value.forgotPasswordEmail
-        if (!email.contains("@")) return
+        val email = _uiState.value.forgotPasswordEmail.trim()
+        if (!isValidEmail(email)) return
         viewModelScope.launch {
             _uiState.update { it.copy(isSendingResetEmail = true) }
             runCatching { authRepository.resetPasswordForEmail(email) }
@@ -122,7 +102,9 @@ class LoginViewModel(
                     }
                 }
                 .onFailure { e ->
-                    _uiState.update { it.copy(isSendingResetEmail = false, errorMessage = mapAuthError(e)) }
+                    _uiState.update {
+                        it.copy(isSendingResetEmail = false, errorMessage = e.toUserMessage("Не вдалося надіслати лист. Спробуйте ще раз"))
+                    }
                 }
         }
     }
@@ -131,39 +113,26 @@ class LoginViewModel(
         _uiState.update { it.copy(resetPasswordMessage = null) }
     }
 
+    /** Після входу профіль лише читається; мету й вік питаємо тільки при першому вході через Google. */
     private fun launchSignIn(signIn: suspend () -> Unit) {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
             runCatching {
                 signIn()
-                val userId = requireNotNull(authRepository.currentUserId) { "Немає активної сесії" }
-                val state = _uiState.value
-                val profile = authRepository.fetchOrCreateProfile(
-                    userId = userId,
-                    defaultName = authRepository.suggestedDisplayName() ?: "Користувач",
-                    defaultPurposeRole = state.purposeRole,
-                    defaultAgeGroup = state.ageGroup
-                )
-                authRepository.updateProfileRoles(userId, state.purposeRole, state.ageGroup)
-                currentUserStore.set(profile.copy(purposeRole = state.purposeRole, ageGroup = state.ageGroup))
+                authRepository.loadProfileStatus()
+            }.onSuccess { status ->
                 demoModeStore.disable()
-            }.onSuccess {
-                _uiState.update { it.copy(isLoading = false, isLoggedIn = true) }
+                val destination = when (status) {
+                    is ProfileStatus.Ready -> {
+                        currentUserStore.set(status.user)
+                        AuthDestination.MAP
+                    }
+                    is ProfileStatus.NeedsRoles -> AuthDestination.ROLE_SETUP
+                }
+                _uiState.update { it.copy(isLoading = false, destination = destination) }
             }.onFailure { e ->
-                _uiState.update { it.copy(isLoading = false, errorMessage = mapAuthError(e)) }
+                _uiState.update { it.copy(isLoading = false, errorMessage = e.toUserMessage("Не вдалося увійти. Спробуйте ще раз")) }
             }
         }
-    }
-
-    private fun mapAuthError(e: Throwable): String = when (e) {
-        is AuthRestException -> when (e.errorCode) {
-            AuthErrorCode.InvalidCredentials -> "Невірний email або пароль"
-            AuthErrorCode.UserNotFound -> "Акаунта з таким email не знайдено"
-            AuthErrorCode.EmailExists, AuthErrorCode.UserAlreadyExists -> "Акаунт з такою поштою вже існує"
-            AuthErrorCode.EmailNotConfirmed -> "Підтвердь email перед входом — перевір пошту"
-            AuthErrorCode.WeakPassword -> "Пароль занадто простий"
-            else -> e.errorDescription
-        }
-        else -> e.message ?: "Помилка входу"
     }
 }

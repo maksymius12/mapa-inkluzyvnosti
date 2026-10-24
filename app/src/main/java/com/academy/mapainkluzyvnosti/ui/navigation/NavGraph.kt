@@ -26,6 +26,8 @@ import com.academy.mapainkluzyvnosti.ui.screens.categories.CategoriesScreen
 import com.academy.mapainkluzyvnosti.ui.screens.favorites.FavoritesScreen
 import com.academy.mapainkluzyvnosti.ui.screens.filters.FiltersScreen
 import com.academy.mapainkluzyvnosti.ui.screens.login.LoginScreen
+import com.academy.mapainkluzyvnosti.ui.screens.login.RoleSetupScreen
+import com.academy.mapainkluzyvnosti.ui.screens.login.SignUpScreen
 import com.academy.mapainkluzyvnosti.ui.screens.map.MapScreen
 import com.academy.mapainkluzyvnosti.ui.screens.notifications.NotificationsScreen
 import com.academy.mapainkluzyvnosti.ui.screens.photoupload.PhotoUploadScreen
@@ -49,6 +51,12 @@ fun MapaNavHost(startRoute: String) {
     val showBottomBar = currentRoute in Routes.bottomNavRoutes
 
     fun goToLogin() = navController.navigate(Routes.LOGIN) { popUpTo(0) { inclusive = true } }
+
+    /** Після входу/реєстрації: мапа стає коренем стеку, екрани входу прибираються. */
+    fun goToMapAfterAuth() {
+        startup.markOnboardingSeen()
+        navController.navigate(Routes.MAP) { popUpTo(navController.graph.id) { inclusive = true } }
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -88,12 +96,29 @@ fun MapaNavHost(startRoute: String) {
                 WelcomeScreen(onStart = openLogin, onSignIn = openLogin)
             }
             composable(Routes.LOGIN) {
-                LoginScreen(onLoggedIn = {
-                    startup.markOnboardingSeen()
-                    navController.navigate(Routes.MAP) {
-                        popUpTo(Routes.LOGIN) { inclusive = true }
+                LoginScreen(
+                    onLoggedIn = { goToMapAfterAuth() },
+                    onNeedsRoleSetup = {
+                        startup.markOnboardingSeen()
+                        navController.navigate(Routes.ROLE_SETUP) { popUpTo(navController.graph.id) { inclusive = true } }
+                    },
+                    onOpenSignUp = { navController.navigate(Routes.SIGN_UP) }
+                )
+            }
+            composable(Routes.SIGN_UP) {
+                SignUpScreen(
+                    onSignedIn = { goToMapAfterAuth() },
+                    onOpenLogin = {
+                        // Зазвичай реєстрацію відкривають з екрана входу — просто повертаємось до нього.
+                        if (!navController.popBackStack(Routes.LOGIN, inclusive = false)) goToLogin()
                     }
-                })
+                )
+            }
+            composable(Routes.ROLE_SETUP) {
+                RoleSetupScreen(
+                    onDone = { goToMapAfterAuth() },
+                    onNeedsSignIn = { goToLogin() }
+                )
             }
             composable(Routes.MAP) {
                 MapScreen(

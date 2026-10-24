@@ -7,67 +7,63 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialException
 import com.academy.mapainkluzyvnosti.BuildConfig
-import com.academy.mapainkluzyvnosti.data.model.UserAgeGroup
 import com.academy.mapainkluzyvnosti.ui.components.PrimaryButton
 import com.academy.mapainkluzyvnosti.ui.components.SecondaryButton
-import com.academy.mapainkluzyvnosti.ui.screens.welcome.AppLogo
-import com.academy.mapainkluzyvnosti.data.model.UserPurposeRole
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
 
+/** Вхід: email і пароль, «Забули пароль?», Google, гість і посилання на реєстрацію. */
 @Composable
-fun LoginScreen(onLoggedIn: () -> Unit, viewModel: LoginViewModel = koinViewModel()) {
+fun LoginScreen(
+    onLoggedIn: () -> Unit,
+    onNeedsRoleSetup: () -> Unit,
+    onOpenSignUp: () -> Unit,
+    viewModel: LoginViewModel = koinViewModel()
+) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    LaunchedEffect(uiState.isLoggedIn) {
-        if (uiState.isLoggedIn) onLoggedIn()
+    LaunchedEffect(uiState.destination) {
+        when (uiState.destination) {
+            AuthDestination.MAP -> onLoggedIn()
+            AuthDestination.ROLE_SETUP -> onNeedsRoleSetup()
+            null -> return@LaunchedEffect
+        }
+        viewModel.consumeDestination()
     }
 
     LaunchedEffect(uiState.resetPasswordMessage) {
@@ -102,15 +98,6 @@ fun LoginScreen(onLoggedIn: () -> Unit, viewModel: LoginViewModel = koinViewMode
         }
     }
 
-    val segmentedColors = SegmentedButtonDefaults.colors(
-        activeContainerColor = MaterialTheme.colorScheme.primary,
-        activeContentColor = androidx.compose.ui.graphics.Color.White,
-        activeBorderColor = MaterialTheme.colorScheme.primary,
-        inactiveContainerColor = MaterialTheme.colorScheme.surface,
-        inactiveContentColor = MaterialTheme.colorScheme.onSurface,
-        inactiveBorderColor = MaterialTheme.colorScheme.outlineVariant
-    )
-
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -121,116 +108,47 @@ fun LoginScreen(onLoggedIn: () -> Unit, viewModel: LoginViewModel = koinViewMode
             .padding(24.dp),
         verticalArrangement = Arrangement.Center
     ) {
-        Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-            AppLogo(width = 72.dp)
-        }
-        Text(
-            text = "Мапа Інклюзивності",
-            style = MaterialTheme.typography.headlineMedium,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth().padding(top = 16.dp)
-        )
-        Text(
-            text = "Шевченківський район",
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.primary,
-            textAlign = TextAlign.Center,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 4.dp, bottom = 28.dp)
-        )
+        AuthHeader(subtitle = "Шевченківський район", modifier = Modifier.padding(bottom = 28.dp))
 
-        Text(text = "Мета використання", style = MaterialTheme.typography.titleSmall)
-        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 20.dp)) {
-            SegmentedButton(
-                selected = uiState.purposeRole == UserPurposeRole.RESIDENT,
-                onClick = { viewModel.setPurposeRole(UserPurposeRole.RESIDENT) },
-                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
-                colors = segmentedColors
-            ) { Text("Мешканець") }
-            SegmentedButton(
-                selected = uiState.purposeRole == UserPurposeRole.VOLUNTEER,
-                onClick = { viewModel.setPurposeRole(UserPurposeRole.VOLUNTEER) },
-                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
-                colors = segmentedColors
-            ) { Text("Волонтер") }
-        }
-
-        Text(text = "Вікова категорія", style = MaterialTheme.typography.titleSmall)
-        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 28.dp)) {
-            SegmentedButton(
-                selected = uiState.ageGroup == UserAgeGroup.STUDENT,
-                onClick = { viewModel.setAgeGroup(UserAgeGroup.STUDENT) },
-                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
-                colors = segmentedColors
-            ) { Text("Учень") }
-            SegmentedButton(
-                selected = uiState.ageGroup == UserAgeGroup.ADULT,
-                onClick = { viewModel.setAgeGroup(UserAgeGroup.ADULT) },
-                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
-                colors = segmentedColors
-            ) { Text("Дорослий") }
-        }
+        Text(text = "Вхід", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(bottom = 12.dp))
 
         OutlinedTextField(
             value = uiState.email,
             onValueChange = viewModel::onEmailChange,
             label = { Text("Email") },
             singleLine = true,
+            enabled = !uiState.isLoading,
             isError = uiState.emailError != null,
             supportingText = uiState.emailError?.let { { Text(it) } },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-            shape = RoundedCornerShape(14.dp),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next),
+            shape = AuthFieldShape,
             modifier = Modifier.fillMaxWidth()
         )
 
-        OutlinedTextField(
+        PasswordField(
             value = uiState.password,
             onValueChange = viewModel::onPasswordChange,
-            label = { Text("Пароль") },
-            singleLine = true,
-            isError = uiState.passwordError != null,
-            supportingText = uiState.passwordError?.let { { Text(it) } },
-            visualTransformation = if (uiState.isPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-            trailingIcon = {
-                IconButton(onClick = viewModel::togglePasswordVisibility) {
-                    Icon(
-                        imageVector = if (uiState.isPasswordVisible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
-                        contentDescription = if (uiState.isPasswordVisible) "Приховати пароль" else "Показати пароль"
-                    )
-                }
-            },
-            shape = RoundedCornerShape(14.dp),
-            modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
-        )
-
-        if (uiState.formMode == AuthFormMode.SIGN_IN) {
-            TextButton(
-                onClick = viewModel::openForgotPasswordDialog,
-                modifier = Modifier.align(Alignment.End)
-            ) {
-                Text("Забули пароль?")
-            }
-        }
-
-        PrimaryButton(
-            text = uiState.formTitle,
-            onClick = viewModel::submitEmailForm,
+            label = "Пароль",
+            error = uiState.passwordError,
             enabled = !uiState.isLoading,
             modifier = Modifier.padding(top = 8.dp)
         )
 
         TextButton(
-            onClick = {
-                viewModel.setFormMode(if (uiState.formMode == AuthFormMode.SIGN_IN) AuthFormMode.SIGN_UP else AuthFormMode.SIGN_IN)
-            },
-            modifier = Modifier.fillMaxWidth()
+            onClick = viewModel::openForgotPasswordDialog,
+            modifier = Modifier.align(Alignment.End)
         ) {
-            Text(
-                if (uiState.formMode == AuthFormMode.SIGN_IN) "Немає акаунту? Зареєструватись" else "Вже є акаунт? Увійти"
-            )
+            Text("Забули пароль?")
         }
+
+        PrimaryButton(
+            text = "Увійти",
+            onClick = viewModel::submitEmailForm,
+            loading = uiState.isLoading,
+            modifier = Modifier.padding(top = 8.dp)
+        )
+
+        AuthErrorText(uiState.errorMessage)
 
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -246,7 +164,7 @@ fun LoginScreen(onLoggedIn: () -> Unit, viewModel: LoginViewModel = koinViewMode
         }
 
         SecondaryButton(
-            text = "Увійти за допомогою Google",
+            text = "Увійти через Google",
             onClick = ::launchGoogleSignIn,
             enabled = !uiState.isLoading
         )
@@ -261,18 +179,18 @@ fun LoginScreen(onLoggedIn: () -> Unit, viewModel: LoginViewModel = koinViewMode
             Text("Продовжити як гість", fontWeight = FontWeight.SemiBold)
         }
 
+        TextButton(
+            onClick = onOpenSignUp,
+            enabled = !uiState.isLoading,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Немає акаунта? Зареєструватись")
+        }
+
         if (uiState.isLoading) {
-            Box(modifier = Modifier.fillMaxWidth().padding(top = 24.dp), contentAlignment = Alignment.Center) {
+            Box(modifier = Modifier.fillMaxWidth().padding(top = 16.dp), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
             }
-        }
-        uiState.errorMessage?.let { message ->
-            Text(
-                text = message,
-                color = MaterialTheme.colorScheme.error,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth().padding(top = 16.dp)
-            )
         }
     }
 
@@ -299,17 +217,24 @@ private fun ForgotPasswordDialog(
         onDismissRequest = onDismiss,
         title = { Text("Відновлення пароля") },
         text = {
-            OutlinedTextField(
-                value = email,
-                onValueChange = onEmailChange,
-                label = { Text("Email") },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                modifier = Modifier.fillMaxWidth()
-            )
+            Column {
+                Text(
+                    text = "Ми надішлемо лист із посиланням для зміни пароля.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
+                OutlinedTextField(
+                    value = email,
+                    onValueChange = onEmailChange,
+                    label = { Text("Email") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
         },
         confirmButton = {
-            TextButton(onClick = onSend, enabled = !isSending && email.contains("@")) {
+            TextButton(onClick = onSend, enabled = !isSending && isValidEmail(email)) {
                 Text("Надіслати")
             }
         },

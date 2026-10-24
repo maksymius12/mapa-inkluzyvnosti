@@ -37,6 +37,7 @@ import com.academy.mapainkluzyvnosti.ui.components.CategoryGroup
 import com.academy.mapainkluzyvnosti.ui.components.MapaCard
 import com.academy.mapainkluzyvnosti.ui.components.MapaChip
 import com.academy.mapainkluzyvnosti.ui.components.MapaSwitch
+import com.academy.mapainkluzyvnosti.ui.components.RoleAndAgeSelector
 import com.academy.mapainkluzyvnosti.ui.components.ScreenHeader
 import com.academy.mapainkluzyvnosti.ui.components.SecondaryButton
 import com.academy.mapainkluzyvnosti.ui.theme.StatusBarrier
@@ -49,6 +50,7 @@ fun SettingsScreen(onBack: () -> Unit, onSignedOut: () -> Unit, viewModel: Setti
     val isDemoMode by viewModel.isDemoMode.collectAsState()
     val settings by viewModel.settings.collectAsState()
     val dialogState by viewModel.dialogState.collectAsState()
+    val currentUser by viewModel.currentUser.collectAsState()
 
     Column(modifier = Modifier.fillMaxSize()) {
         ScreenHeader(title = "Налаштування", onBack = onBack)
@@ -95,6 +97,29 @@ fun SettingsScreen(onBack: () -> Unit, onSignedOut: () -> Unit, viewModel: Setti
                     subtitle = "${settings.defaultCategories.size} з ${PlaceCategory.entries.size} показуються після скидання фільтрів",
                     onClick = viewModel::openCategoryPicker
                 )
+            }
+
+            val user = currentUser
+            if (!isDemoMode && user != null) {
+                SectionTitle("Про вас")
+                MapaCard(modifier = Modifier.fillMaxWidth()) {
+                    RoleAndAgeSelector(
+                        purposeRole = user.purposeRole,
+                        onPurposeRoleChange = viewModel::setPurposeRole,
+                        ageGroup = user.ageGroup,
+                        onAgeGroupChange = viewModel::setAgeGroup,
+                        enabled = !dialogState.isSavingRoles,
+                        modifier = Modifier.padding(16.dp)
+                    )
+                }
+                dialogState.rolesMessage?.let { message ->
+                    Text(
+                        text = message,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                }
             }
 
             if (!isDemoMode) {

@@ -3,6 +3,9 @@ package com.academy.mapainkluzyvnosti.ui.navigation
 object Routes {
     const val WELCOME = "welcome"
     const val LOGIN = "login"
+    const val SIGN_UP = "sign_up"
+    /** Один раз після першого входу через Google: мета користування й вікова категорія. */
+    const val ROLE_SETUP = "role_setup"
     const val MAP = "map"
     const val SEARCH = "search"
     const val FILTERS = "filters"

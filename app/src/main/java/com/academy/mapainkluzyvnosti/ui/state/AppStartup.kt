@@ -6,6 +6,7 @@ import com.academy.mapainkluzyvnosti.data.model.AppUser
 import com.academy.mapainkluzyvnosti.data.model.UserAgeGroup
 import com.academy.mapainkluzyvnosti.data.model.UserPurposeRole
 import com.academy.mapainkluzyvnosti.data.repository.AuthRepository
+import com.academy.mapainkluzyvnosti.data.repository.ProfileStatus
 import com.academy.mapainkluzyvnosti.ui.navigation.Routes
 
 /**
@@ -23,25 +24,29 @@ class AppStartup(
         if (!AppPreferences.isOnboardingSeen(context)) return Routes.WELCOME
         if (demoModeStore.isDemoMode.value) return Routes.MAP
         if (!authRepository.awaitRestoredSession()) return Routes.LOGIN
-        restoreCurrentUser()
-        return Routes.MAP
+        return restoreCurrentUser()
     }
 
     fun markOnboardingSeen() = AppPreferences.setOnboardingSeen(context)
 
-    private suspend fun restoreCurrentUser() {
-        val userId = authRepository.currentUserId ?: return
+    /** Відновлює профіль збереженої сесії; якщо після входу через Google не обрано мету й вік — крок вибору. */
+    private suspend fun restoreCurrentUser(): String {
+        val userId = authRepository.currentUserId ?: return Routes.LOGIN
         val displayName = authRepository.suggestedDisplayName() ?: DEFAULT_NAME
-        val profile = runCatching { authRepository.fetchOrCreateProfile(userId, displayName) }.getOrNull()
-        // Без мережі профіль недоступний — тримаємо мінімального користувача, щоб екрани не вважали його гостем.
-        currentUserStore.set(
-            profile ?: AppUser(
-                id = userId,
-                name = displayName,
-                purposeRole = UserPurposeRole.RESIDENT,
-                ageGroup = UserAgeGroup.ADULT
+        when (val status = runCatching { authRepository.loadProfileStatus() }.getOrNull()) {
+            is ProfileStatus.Ready -> currentUserStore.set(status.user)
+            is ProfileStatus.NeedsRoles -> return Routes.ROLE_SETUP
+            // Без мережі профіль недоступний — тримаємо мінімального користувача, щоб екрани не вважали його гостем.
+            null -> currentUserStore.set(
+                AppUser(
+                    id = userId,
+                    name = displayName,
+                    purposeRole = UserPurposeRole.RESIDENT,
+                    ageGroup = UserAgeGroup.ADULT
+                )
             )
-        )
+        }
+        return Routes.MAP
     }
 
     private companion object {
