@@ -7,6 +7,11 @@ import com.academy.mapainkluzyvnosti.data.repository.AuthRepository
 import com.academy.mapainkluzyvnosti.data.repository.ProfileStatus
 import com.academy.mapainkluzyvnosti.ui.state.CurrentUserStore
 import com.academy.mapainkluzyvnosti.ui.state.DemoModeStore
+import io.github.jan.supabase.auth.exception.AuthErrorCode
+import io.github.jan.supabase.auth.exception.AuthRestException
+import io.github.jan.supabase.exceptions.HttpRequestException
+import io.github.jan.supabase.exceptions.RestException
+import java.io.IOException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -15,6 +20,9 @@ import kotlinx.coroutines.launch
 
 /** Куди вести після успішного входу. */
 enum class AuthDestination { MAP, ROLE_SETUP }
+
+/** Відкрити екран «Введіть код». [sendCode] — надіслати новий код при відкритті. */
+data class OtpRequest(val purpose: OtpPurpose, val email: String, val sendCode: Boolean)
 
 data class LoginUiState(
     val email: String = "",
@@ -27,7 +35,10 @@ data class LoginUiState(
     val isForgotPasswordDialogOpen: Boolean = false,
     val forgotPasswordEmail: String = "",
     val isSendingResetEmail: Boolean = false,
-    val resetPasswordMessage: String? = null
+    val forgotPasswordError: String? = null,
+    /** Пошта не підтверджена — запропонувати надіслати новий код. */
+    val unconfirmedEmail: String? = null,
+    val otpRequest: OtpRequest? = null
 )
 
 /** Вхід: email/пароль, Google, гість. Жодних питань про мету й вікову категорію. */
@@ -57,11 +68,11 @@ class LoginViewModel(
             _uiState.update { it.copy(emailError = emailError, passwordError = passwordError) }
             return
         }
-        launchSignIn { authRepository.signInWithEmail(email, state.password) }
+        launchSignIn(email) { authRepository.signInWithEmail(email, state.password) }
     }
 
     fun signInWithGoogleIdToken(idToken: String) {
-        launchSignIn { authRepository.signInWithGoogleIdToken(idToken) }
+        launchSignIn(email = null) { authRepository.signInWithGoogleIdToken(idToken) }
     }
 
     /** Гостьовий режим — локальний прапорець, без жодного звернення до Supabase Auth. */
@@ -75,7 +86,7 @@ class LoginViewModel(
     }
 
     fun openForgotPasswordDialog() {
-        _uiState.update { it.copy(isForgotPasswordDialogOpen = true, forgotPasswordEmail = it.email, resetPasswordMessage = null) }
+        _uiState.update { it.copy(isForgotPasswordDialogOpen = true, forgotPasswordEmail = it.email, forgotPasswordError = null) }
     }
 
     fun dismissForgotPasswordDialog() {
@@ -83,38 +94,48 @@ class LoginViewModel(
     }
 
     fun onForgotPasswordEmailChange(value: String) {
-        _uiState.update { it.copy(forgotPasswordEmail = value) }
+        _uiState.update { it.copy(forgotPasswordEmail = value, forgotPasswordError = null) }
     }
 
+    /**
+     * «Забули пароль?»: надсилаємо код і відкриваємо екран коду. Наявність акаунта не розкриваємо —
+     * Supabase відповідає однаково; зупиняємось лише на помилках мережі й частоти запитів.
+     */
     fun sendPasswordReset() {
         val email = _uiState.value.forgotPasswordEmail.trim()
         if (!isValidEmail(email)) return
         viewModelScope.launch {
-            _uiState.update { it.copy(isSendingResetEmail = true) }
-            runCatching { authRepository.resetPasswordForEmail(email) }
-                .onSuccess {
-                    _uiState.update {
-                        it.copy(
-                            isSendingResetEmail = false,
-                            isForgotPasswordDialogOpen = false,
-                            resetPasswordMessage = "Лист для відновлення пароля надіслано"
-                        )
-                    }
+            _uiState.update { it.copy(isSendingResetEmail = true, forgotPasswordError = null) }
+            val error = runCatching { authRepository.sendPasswordResetCode(email) }.exceptionOrNull()
+            val mustStop = error is HttpRequestException || error is IOException ||
+                (error as? RestException)?.statusCode == 429 ||
+                (error as? AuthRestException)?.errorCode == AuthErrorCode.OverEmailSendRateLimit
+            _uiState.update {
+                if (error != null && mustStop) {
+                    it.copy(isSendingResetEmail = false, forgotPasswordError = error.toUserMessage("Не вдалося надіслати код. Спробуйте ще раз"))
+                } else {
+                    it.copy(
+                        isSendingResetEmail = false,
+                        isForgotPasswordDialogOpen = false,
+                        otpRequest = OtpRequest(OtpPurpose.PASSWORD_RESET, email, sendCode = false)
+                    )
                 }
-                .onFailure { e ->
-                    _uiState.update {
-                        it.copy(isSendingResetEmail = false, errorMessage = e.toUserMessage("Не вдалося надіслати лист. Спробуйте ще раз"))
-                    }
-                }
+            }
         }
     }
 
-    fun consumeResetPasswordMessage() {
-        _uiState.update { it.copy(resetPasswordMessage = null) }
+    fun dismissUnconfirmedEmail() = _uiState.update { it.copy(unconfirmedEmail = null) }
+
+    /** Пошта не підтверджена: новий код надішле екран коду одразу при відкритті. */
+    fun confirmEmailWithNewCode() {
+        val email = _uiState.value.unconfirmedEmail ?: return
+        _uiState.update { it.copy(unconfirmedEmail = null, otpRequest = OtpRequest(OtpPurpose.SIGN_UP, email, sendCode = true)) }
     }
 
+    fun consumeOtpRequest() = _uiState.update { it.copy(otpRequest = null) }
+
     /** Після входу профіль лише читається; мету й вік питаємо тільки при першому вході через Google. */
-    private fun launchSignIn(signIn: suspend () -> Unit) {
+    private fun launchSignIn(email: String?, signIn: suspend () -> Unit) {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
             runCatching {
@@ -131,7 +152,14 @@ class LoginViewModel(
                 }
                 _uiState.update { it.copy(isLoading = false, destination = destination) }
             }.onFailure { e ->
-                _uiState.update { it.copy(isLoading = false, errorMessage = e.toUserMessage("Не вдалося увійти. Спробуйте ще раз")) }
+                val notConfirmed = (e as? AuthRestException)?.errorCode == AuthErrorCode.EmailNotConfirmed
+                _uiState.update {
+                    if (notConfirmed && email != null) {
+                        it.copy(isLoading = false, unconfirmedEmail = email)
+                    } else {
+                        it.copy(isLoading = false, errorMessage = e.toUserMessage("Не вдалося увійти. Спробуйте ще раз"))
+                    }
+                }
             }
         }
     }

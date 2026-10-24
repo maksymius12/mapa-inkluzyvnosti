@@ -16,6 +16,8 @@ import com.academy.mapainkluzyvnosti.domain.usecase.ImportOsmPlaces
 import com.academy.mapainkluzyvnosti.ui.screens.favorites.FavoritesViewModel
 import com.academy.mapainkluzyvnosti.ui.screens.filters.FiltersViewModel
 import com.academy.mapainkluzyvnosti.ui.screens.login.LoginViewModel
+import com.academy.mapainkluzyvnosti.ui.screens.login.OtpPurpose
+import com.academy.mapainkluzyvnosti.ui.screens.login.OtpViewModel
 import com.academy.mapainkluzyvnosti.ui.screens.login.RoleSetupViewModel
 import com.academy.mapainkluzyvnosti.ui.screens.login.SignUpViewModel
 import com.academy.mapainkluzyvnosti.ui.screens.map.AddPlaceViewModel
@@ -74,6 +76,9 @@ val stateModule = module {
 val viewModelModule = module {
     viewModel { LoginViewModel(get(), get(), get()) }
     viewModel { SignUpViewModel(get(), get(), get()) }
+    viewModel { (purpose: OtpPurpose, email: String, sendCode: Boolean) ->
+        OtpViewModel(purpose, email, sendCode, get(), get(), get())
+    }
     viewModel { RoleSetupViewModel(get(), get()) }
     viewModel { MapViewModel(get(), get(), get(), get(), get()) }
     viewModel { AddPlaceViewModel(get(), get(), get(), get()) }

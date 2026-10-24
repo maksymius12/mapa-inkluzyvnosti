@@ -1,11 +1,19 @@
 package com.academy.mapainkluzyvnosti.ui.navigation
 
+import android.net.Uri
+import com.academy.mapainkluzyvnosti.ui.screens.login.OtpPurpose
+
 object Routes {
     const val WELCOME = "welcome"
     const val LOGIN = "login"
     const val SIGN_UP = "sign_up"
     /** Один раз після першого входу через Google: мета користування й вікова категорія. */
     const val ROLE_SETUP = "role_setup"
+
+    /** «Введіть код» з листа: підтвердження реєстрації або скидання пароля. */
+    const val VERIFY_CODE_PATTERN = "verify_code/{purpose}?email={email}&send={send}"
+    fun verifyCode(purpose: OtpPurpose, email: String, sendCode: Boolean) =
+        "verify_code/${purpose.name}?email=${Uri.encode(email)}&send=$sendCode"
     const val MAP = "map"
     const val SEARCH = "search"
     const val FILTERS = "filters"

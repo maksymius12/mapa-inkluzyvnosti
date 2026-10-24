@@ -26,6 +26,8 @@ import com.academy.mapainkluzyvnosti.ui.screens.categories.CategoriesScreen
 import com.academy.mapainkluzyvnosti.ui.screens.favorites.FavoritesScreen
 import com.academy.mapainkluzyvnosti.ui.screens.filters.FiltersScreen
 import com.academy.mapainkluzyvnosti.ui.screens.login.LoginScreen
+import com.academy.mapainkluzyvnosti.ui.screens.login.OtpPurpose
+import com.academy.mapainkluzyvnosti.ui.screens.login.VerifyCodeScreen
 import com.academy.mapainkluzyvnosti.ui.screens.login.RoleSetupScreen
 import com.academy.mapainkluzyvnosti.ui.screens.login.SignUpScreen
 import com.academy.mapainkluzyvnosti.ui.screens.map.MapScreen
@@ -102,14 +104,57 @@ fun MapaNavHost(startRoute: String) {
                         startup.markOnboardingSeen()
                         navController.navigate(Routes.ROLE_SETUP) { popUpTo(navController.graph.id) { inclusive = true } }
                     },
-                    onOpenSignUp = { navController.navigate(Routes.SIGN_UP) }
+                    onOpenSignUp = { navController.navigate(Routes.SIGN_UP) },
+                    onOpenVerifyCode = { request ->
+                        navController.navigate(Routes.verifyCode(request.purpose, request.email, request.sendCode))
+                    }
                 )
             }
             composable(Routes.SIGN_UP) {
                 SignUpScreen(
                     onSignedIn = { goToMapAfterAuth() },
+                    onCodeSent = { email -> navController.navigate(Routes.verifyCode(OtpPurpose.SIGN_UP, email, sendCode = false)) },
                     onOpenLogin = {
                         // Зазвичай реєстрацію відкривають з екрана входу — просто повертаємось до нього.
+                        if (!navController.popBackStack(Routes.LOGIN, inclusive = false)) goToLogin()
+                    }
+                )
+            }
+            composable(
+                route = Routes.VERIFY_CODE_PATTERN,
+                arguments = listOf(
+                    navArgument("purpose") { type = NavType.StringType },
+                    navArgument("email") {
+                        type = NavType.StringType
+                        defaultValue = ""
+                    },
+                    navArgument("send") {
+                        type = NavType.BoolType
+                        defaultValue = false
+                    }
+                )
+            ) { entry ->
+                val purpose = entry.arguments?.getString("purpose")
+                    ?.let { name -> OtpPurpose.entries.firstOrNull { it.name == name } }
+                    ?: OtpPurpose.SIGN_UP
+                VerifyCodeScreen(
+                    purpose = purpose,
+                    email = entry.arguments?.getString("email").orEmpty(),
+                    sendCodeOnStart = entry.arguments?.getBoolean("send") ?: false,
+                    onSignedIn = { goToMapAfterAuth() },
+                    onNeedsRoleSetup = {
+                        startup.markOnboardingSeen()
+                        navController.navigate(Routes.ROLE_SETUP) { popUpTo(navController.graph.id) { inclusive = true } }
+                    },
+                    onChangeEmail = {
+                        // Після реєстрації — назад на крок 1 з уже заповненими полями; після входу — нова реєстрація.
+                        if (!navController.popBackStack(Routes.SIGN_UP, inclusive = false)) {
+                            navController.navigate(Routes.SIGN_UP) {
+                                popUpTo(Routes.VERIFY_CODE_PATTERN) { inclusive = true }
+                            }
+                        }
+                    },
+                    onBackToLogin = {
                         if (!navController.popBackStack(Routes.LOGIN, inclusive = false)) goToLogin()
                     }
                 )

@@ -15,8 +15,6 @@ import com.academy.mapainkluzyvnosti.ui.state.DemoModeStore
 import io.github.jan.supabase.auth.exception.AuthErrorCode
 import io.github.jan.supabase.auth.exception.AuthRestException
 import io.github.jan.supabase.auth.exception.AuthWeakPasswordException
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -25,10 +23,8 @@ import kotlinx.coroutines.launch
 
 private const val NAME_MIN = 2
 private const val NAME_MAX = 50
-private const val PASSWORD_MIN = 6
-private const val RESEND_COOLDOWN_SECONDS = 60
 
-enum class SignUpStep { ACCOUNT, ROLES, CHECK_EMAIL }
+enum class SignUpStep { ACCOUNT, ROLES }
 
 data class SignUpUiState(
     val step: SignUpStep = SignUpStep.ACCOUNT,
@@ -48,19 +44,16 @@ data class SignUpUiState(
     val ageGroup: UserAgeGroup = UserAgeGroup.ADULT,
     val isSubmitting: Boolean = false,
     val errorMessage: String? = null,
-    // «Перевірте пошту»
-    val confirmationEmail: String = "",
-    val isResending: Boolean = false,
-    val resendCooldownSeconds: Int = 0,
-    val resendMessage: String? = null,
+    /** Код надіслано на цю пошту — відкрити екран «Введіть код» (одноразова подія). */
+    val codeSentTo: String? = null,
     /** Сесія вже є (підтвердження пошти вимкнене) — на мапу. */
     val isSignedIn: Boolean = false
 )
 
 /**
  * Реєстрація: крок 1 — ім'я, email, пароль, згода; крок 2 — мета й вікова категорія.
- * Профіль створює сервер з user metadata, тож відсутність сесії після signUp — не помилка,
- * а екран «Перевірте пошту».
+ * Профіль створює сервер з user metadata. Якщо Supabase вимагає підтвердження пошти,
+ * далі — екран введення 6-значного коду (OtpViewModel).
  */
 class SignUpViewModel(
     private val authRepository: AuthRepository,
@@ -70,8 +63,6 @@ class SignUpViewModel(
 
     private val _uiState = MutableStateFlow(SignUpUiState())
     val uiState: StateFlow<SignUpUiState> = _uiState.asStateFlow()
-
-    private var cooldownJob: Job? = null
 
     fun onNameChange(value: String) = _uiState.update { it.copy(name = value.take(NAME_MAX + 10), nameError = null) }
     fun onEmailChange(value: String) = _uiState.update { it.copy(email = value, emailError = null, errorMessage = null) }
@@ -91,12 +82,8 @@ class SignUpViewModel(
             else -> null
         }
         val emailError = if (!isValidEmail(state.email)) "Введіть коректний email" else null
-        val passwordError = if (state.password.length < PASSWORD_MIN) "Пароль має містити щонайменше $PASSWORD_MIN символів" else null
-        val confirmError = when {
-            state.passwordConfirm.isEmpty() -> "Повторіть пароль"
-            state.passwordConfirm != state.password -> "Паролі не збігаються"
-            else -> null
-        }
+        val passwordError = passwordRuleError(state.password)
+        val confirmError = passwordConfirmError(state.password, state.passwordConfirm)
         val termsError = if (!state.acceptedTerms) "Потрібна згода з умовами користування" else null
         if (listOf(nameError, emailError, passwordError, confirmError, termsError).any { it != null }) {
             _uiState.update {
@@ -115,14 +102,13 @@ class SignUpViewModel(
 
     /** «Назад»: з кроку 2 — на крок 1. Повертає false, якщо назад уже нікуди (крок 1). */
     fun back(): Boolean {
-        val step = _uiState.value.step
         if (_uiState.value.isSubmitting) return true
-        return when (step) {
+        return when (_uiState.value.step) {
             SignUpStep.ROLES -> {
                 _uiState.update { it.copy(step = SignUpStep.ACCOUNT, errorMessage = null) }
                 true
             }
-            SignUpStep.ACCOUNT, SignUpStep.CHECK_EMAIL -> false
+            SignUpStep.ACCOUNT -> false
         }
     }
 
@@ -143,17 +129,17 @@ class SignUpViewModel(
             }.onSuccess { result ->
                 when (result) {
                     SignUpResult.SignedIn -> finishSignedIn(state)
-                    is SignUpResult.ConfirmationRequired -> {
-                        _uiState.update {
-                            it.copy(isSubmitting = false, step = SignUpStep.CHECK_EMAIL, confirmationEmail = result.email)
-                        }
-                        startResendCooldown()
+                    // «Змінити пошту» з екрана коду повертає сюди — одразу на крок 1 із заповненими полями.
+                    is SignUpResult.ConfirmationRequired -> _uiState.update {
+                        it.copy(isSubmitting = false, step = SignUpStep.ACCOUNT, codeSentTo = result.email)
                     }
                     SignUpResult.AlreadyRegistered -> showEmailTaken()
                 }
             }.onFailure { e -> handleSignUpError(e) }
         }
     }
+
+    fun consumeCodeSent() = _uiState.update { it.copy(codeSentTo = null) }
 
     private suspend fun finishSignedIn(state: SignUpUiState) {
         val user = runCatching { authRepository.loadProfileStatus() }.getOrNull()
@@ -192,35 +178,6 @@ class SignUpViewModel(
             }
             else -> _uiState.update {
                 it.copy(isSubmitting = false, errorMessage = e.toUserMessage("Не вдалося зареєструватися. Спробуйте ще раз"))
-            }
-        }
-    }
-
-    fun resendConfirmation() {
-        val state = _uiState.value
-        if (state.isResending || state.resendCooldownSeconds > 0) return
-        viewModelScope.launch {
-            _uiState.update { it.copy(isResending = true, resendMessage = null) }
-            runCatching { authRepository.resendSignUpConfirmation(state.confirmationEmail) }
-                .onSuccess {
-                    _uiState.update { it.copy(isResending = false, resendMessage = "Лист надіслано ще раз") }
-                    startResendCooldown()
-                }
-                .onFailure { e ->
-                    _uiState.update {
-                        it.copy(isResending = false, resendMessage = e.toUserMessage("Не вдалося надіслати лист. Спробуйте пізніше"))
-                    }
-                }
-        }
-    }
-
-    /** Supabase дозволяє повторний лист не частіше ніж раз на хвилину — показуємо зворотний відлік. */
-    private fun startResendCooldown() {
-        cooldownJob?.cancel()
-        cooldownJob = viewModelScope.launch {
-            for (seconds in RESEND_COOLDOWN_SECONDS downTo 0) {
-                _uiState.update { it.copy(resendCooldownSeconds = seconds) }
-                if (seconds > 0) delay(1000)
             }
         }
     }

@@ -135,3 +135,15 @@ fun AuthErrorText(message: String?, modifier: Modifier = Modifier) {
 /** Мінімальна перевірка формату email на клієнті (точну робить Supabase). */
 fun isValidEmail(email: String): Boolean =
     Regex("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$").matches(email.trim())
+
+const val PASSWORD_MIN_LENGTH = 6
+
+/** Правила пароля — однакові для реєстрації й встановлення нового пароля. */
+fun passwordRuleError(password: String): String? =
+    if (password.length < PASSWORD_MIN_LENGTH) "Пароль має містити щонайменше $PASSWORD_MIN_LENGTH символів" else null
+
+fun passwordConfirmError(password: String, confirm: String): String? = when {
+    confirm.isEmpty() -> "Повторіть пароль"
+    confirm != password -> "Паролі не збігаються"
+    else -> null
+}

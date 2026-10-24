@@ -1,6 +1,5 @@
 package com.academy.mapainkluzyvnosti.ui.screens.login
 
-import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -51,6 +50,7 @@ fun LoginScreen(
     onLoggedIn: () -> Unit,
     onNeedsRoleSetup: () -> Unit,
     onOpenSignUp: () -> Unit,
+    onOpenVerifyCode: (OtpRequest) -> Unit,
     viewModel: LoginViewModel = koinViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -66,10 +66,10 @@ fun LoginScreen(
         viewModel.consumeDestination()
     }
 
-    LaunchedEffect(uiState.resetPasswordMessage) {
-        uiState.resetPasswordMessage?.let { message ->
-            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
-            viewModel.consumeResetPasswordMessage()
+    LaunchedEffect(uiState.otpRequest) {
+        uiState.otpRequest?.let { request ->
+            viewModel.consumeOtpRequest()
+            onOpenVerifyCode(request)
         }
     }
 
@@ -198,9 +198,20 @@ fun LoginScreen(
         ForgotPasswordDialog(
             email = uiState.forgotPasswordEmail,
             isSending = uiState.isSendingResetEmail,
+            error = uiState.forgotPasswordError,
             onEmailChange = viewModel::onForgotPasswordEmailChange,
             onDismiss = viewModel::dismissForgotPasswordDialog,
             onSend = viewModel::sendPasswordReset
+        )
+    }
+
+    uiState.unconfirmedEmail?.let { email ->
+        AlertDialog(
+            onDismissRequest = viewModel::dismissUnconfirmedEmail,
+            title = { Text("Пошту не підтверджено") },
+            text = { Text("Щоб увійти, підтвердьте пошту $email. Надіслати новий 6-значний код?") },
+            confirmButton = { TextButton(onClick = viewModel::confirmEmailWithNewCode) { Text("Надіслати код") } },
+            dismissButton = { TextButton(onClick = viewModel::dismissUnconfirmedEmail) { Text("Скасувати") } }
         )
     }
 }
@@ -209,6 +220,7 @@ fun LoginScreen(
 private fun ForgotPasswordDialog(
     email: String,
     isSending: Boolean,
+    error: String?,
     onEmailChange: (String) -> Unit,
     onDismiss: () -> Unit,
     onSend: () -> Unit
@@ -219,7 +231,7 @@ private fun ForgotPasswordDialog(
         text = {
             Column {
                 Text(
-                    text = "Ми надішлемо лист із посиланням для зміни пароля.",
+                    text = "Ми надішлемо 6-значний код для зміни пароля.",
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.padding(bottom = 12.dp)
                 )
@@ -228,6 +240,9 @@ private fun ForgotPasswordDialog(
                     onValueChange = onEmailChange,
                     label = { Text("Email") },
                     singleLine = true,
+                    enabled = !isSending,
+                    isError = error != null,
+                    supportingText = error?.let { { Text(it) } },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -235,7 +250,7 @@ private fun ForgotPasswordDialog(
         },
         confirmButton = {
             TextButton(onClick = onSend, enabled = !isSending && isValidEmail(email)) {
-                Text("Надіслати")
+                Text(if (isSending) "Надсилаємо…" else "Надіслати код")
             }
         },
         dismissButton = {

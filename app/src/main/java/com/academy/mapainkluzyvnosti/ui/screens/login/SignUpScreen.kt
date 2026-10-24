@@ -9,15 +9,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.MarkEmailUnread
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -32,7 +28,6 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.academy.mapainkluzyvnosti.ui.components.PrimaryButton
 import com.academy.mapainkluzyvnosti.ui.components.RoleAndAgeSelector
@@ -40,10 +35,11 @@ import com.academy.mapainkluzyvnosti.ui.components.ScreenHeader
 import com.academy.mapainkluzyvnosti.ui.components.SecondaryButton
 import org.koin.compose.viewmodel.koinViewModel
 
-/** Реєстрація у два кроки з індикатором кроків; після надсилання листа — «Перевірте пошту». */
+/** Реєстрація у два кроки з індикатором кроків; якщо треба підтвердити пошту — екран введення коду. */
 @Composable
 fun SignUpScreen(
     onSignedIn: () -> Unit,
+    onCodeSent: (email: String) -> Unit,
     onOpenLogin: () -> Unit,
     viewModel: SignUpViewModel = koinViewModel()
 ) {
@@ -53,16 +49,20 @@ fun SignUpScreen(
         if (uiState.isSignedIn) onSignedIn()
     }
 
+    LaunchedEffect(uiState.codeSentTo) {
+        uiState.codeSentTo?.let { email ->
+            viewModel.consumeCodeSent()
+            onCodeSent(email)
+        }
+    }
+
     fun goBack() {
         if (!viewModel.back()) onOpenLogin()
     }
     BackHandler(onBack = ::goBack)
 
     Column(modifier = Modifier.fillMaxSize()) {
-        ScreenHeader(
-            title = if (uiState.step == SignUpStep.CHECK_EMAIL) "Підтвердження пошти" else "Реєстрація",
-            onBack = if (uiState.step == SignUpStep.CHECK_EMAIL) null else ::goBack
-        )
+        ScreenHeader(title = "Реєстрація", onBack = ::goBack)
         Column(
             modifier = Modifier
                 .weight(1f)
@@ -75,17 +75,14 @@ fun SignUpScreen(
             when (uiState.step) {
                 SignUpStep.ACCOUNT -> AccountStep(uiState, viewModel)
                 SignUpStep.ROLES -> RolesStep(uiState, viewModel)
-                SignUpStep.CHECK_EMAIL -> CheckEmailContent(uiState, viewModel, onOpenLogin)
             }
 
-            if (uiState.step != SignUpStep.CHECK_EMAIL) {
-                TextButton(
-                    onClick = onOpenLogin,
-                    enabled = !uiState.isSubmitting,
-                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp)
-                ) {
-                    Text("Вже є акаунт? Увійти")
-                }
+            TextButton(
+                onClick = onOpenLogin,
+                enabled = !uiState.isSubmitting,
+                modifier = Modifier.fillMaxWidth().padding(top = 12.dp)
+            ) {
+                Text("Вже є акаунт? Увійти")
             }
         }
     }
@@ -183,58 +180,4 @@ private fun RolesStep(uiState: SignUpUiState, viewModel: SignUpViewModel) {
         SecondaryButton(text = "Назад", onClick = { viewModel.back() }, enabled = !uiState.isSubmitting)
     }
     AuthErrorText(uiState.errorMessage)
-}
-
-/** Лист надіслано — це не помилка: підтвердьте пошту й увійдіть. */
-@Composable
-private fun CheckEmailContent(uiState: SignUpUiState, viewModel: SignUpViewModel, onOpenLogin: () -> Unit) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth().padding(top = 24.dp)) {
-        Icon(
-            Icons.Outlined.MarkEmailUnread,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(72.dp)
-        )
-        Text(
-            text = "Перевірте пошту",
-            style = MaterialTheme.typography.headlineSmall,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(top = 16.dp)
-        )
-        Text(
-            text = "Ми надіслали лист на ${uiState.confirmationEmail}. Перейдіть за посиланням у листі, щоб підтвердити пошту. Після підтвердження увійдіть.",
-            style = MaterialTheme.typography.bodyLarge,
-            textAlign = TextAlign.Center,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 8.dp)
-        )
-        Text(
-            text = "Не бачите листа? Перевірте папку «Спам».",
-            style = MaterialTheme.typography.bodySmall,
-            textAlign = TextAlign.Center,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 8.dp)
-        )
-    }
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(top = 28.dp)) {
-        PrimaryButton(text = "До входу", onClick = onOpenLogin)
-        SecondaryButton(
-            text = if (uiState.resendCooldownSeconds > 0) {
-                "Надіслати лист ще раз (${uiState.resendCooldownSeconds} с)"
-            } else {
-                "Надіслати лист ще раз"
-            },
-            onClick = viewModel::resendConfirmation,
-            enabled = !uiState.isResending && uiState.resendCooldownSeconds == 0
-        )
-    }
-    uiState.resendMessage?.let {
-        Text(
-            text = it,
-            style = MaterialTheme.typography.bodyMedium,
-            textAlign = TextAlign.Center,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.fillMaxWidth().padding(top = 12.dp)
-        )
-    }
 }

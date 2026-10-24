@@ -117,7 +117,8 @@ class AuthRepository(private val client: SupabaseClient) {
         purposeRole: UserPurposeRole,
         ageGroup: UserAgeGroup
     ): SignUpResult {
-        val user = client.auth.signUpWith(Email) {
+        // redirectUrl = null: лист містить 6-значний код ({{ .Token }}), а не посилання з переходом.
+        val user = client.auth.signUpWith(Email, redirectUrl = null) {
             this.email = email
             this.password = password
             this.data = buildJsonObject {
@@ -134,12 +135,27 @@ class AuthRepository(private val client: SupabaseClient) {
         }
     }
 
-    suspend fun resendSignUpConfirmation(email: String) {
-        client.auth.resendEmail(OtpType.Email.SIGNUP, email)
+    /** Новий 6-значний код підтвердження реєстрації. */
+    suspend fun resendSignUpCode(email: String) {
+        client.auth.resendEmail(OtpType.Email.SIGNUP, email, redirectUrl = null)
     }
 
-    suspend fun resetPasswordForEmail(email: String) {
-        client.auth.resetPasswordForEmail(email)
+    /**
+     * Лист із 6-значним кодом для скидання пароля. Supabase відповідає однаково
+     * незалежно від того, чи існує акаунт, тож наявність пошти не розкривається.
+     */
+    suspend fun sendPasswordResetCode(email: String) {
+        client.auth.resetPasswordForEmail(email, redirectUrl = null)
+    }
+
+    /** Підтвердження реєстрації кодом із листа; після успіху сесію створено й збережено. */
+    suspend fun verifySignUpCode(email: String, code: String) {
+        client.auth.verifyEmailOtp(type = OtpType.Email.SIGNUP, email = email, token = code)
+    }
+
+    /** Код скидання пароля; після успіху є тимчасова сесія, щоб встановити новий пароль. */
+    suspend fun verifyPasswordResetCode(email: String, code: String) {
+        client.auth.verifyEmailOtp(type = OtpType.Email.RECOVERY, email = email, token = code)
     }
 
     suspend fun signOut() {

@@ -14,6 +14,10 @@ private const val TOO_MANY_ATTEMPTS = "Забагато спроб. Зачека
 private const val SESSION_EXPIRED = "Сесія завершилась. Увійдіть знову"
 const val EMAIL_ALREADY_REGISTERED = "Ця пошта вже зареєстрована. Увійдіть або відновіть пароль"
 
+/** Supabase повертає однаковий код otp_expired і для невірного, і для простроченого коду. */
+const val OTP_INVALID_OR_EXPIRED = "Невірний або прострочений код. Перевірте цифри або надішліть новий код"
+const val OTP_EXPIRED = "Термін дії коду минув. Надішліть новий код"
+
 /**
  * Перетворює помилку мережі чи сервера на зрозумілий українською текст без технічних деталей.
  * Коди MPxxx — власні SQLSTATE з тригерів міграції 20261023120000_user_places.sql.
@@ -43,7 +47,7 @@ private fun AuthRestException.authMessage(fallback: String): String = when (erro
     AuthErrorCode.EmailExists, AuthErrorCode.UserAlreadyExists, AuthErrorCode.IdentityAlreadyExists -> EMAIL_ALREADY_REGISTERED
     AuthErrorCode.WeakPassword -> "Пароль надто простий. Зробіть його довшим і додайте літери та цифри"
     AuthErrorCode.SamePassword -> "Новий пароль має відрізнятися від попереднього"
-    AuthErrorCode.EmailNotConfirmed -> "Пошту ще не підтверджено. Перейдіть за посиланням у листі й увійдіть знову"
+    AuthErrorCode.EmailNotConfirmed -> "Пошту ще не підтверджено. Введіть код із листа"
     AuthErrorCode.EmailAddressInvalid, AuthErrorCode.EmailAddressNotAuthorized -> "Перевірте правильність email"
     AuthErrorCode.UserNotFound -> "Акаунта з таким email не знайдено"
     AuthErrorCode.UserBanned -> "Цей акаунт заблоковано"
@@ -51,7 +55,7 @@ private fun AuthRestException.authMessage(fallback: String): String = when (erro
     AuthErrorCode.OverRequestRateLimit, AuthErrorCode.OverEmailSendRateLimit -> TOO_MANY_ATTEMPTS
     AuthErrorCode.SessionNotFound, AuthErrorCode.SessionExpired,
     AuthErrorCode.RefreshTokenNotFound, AuthErrorCode.RefreshTokenAlreadyUsed, AuthErrorCode.BadJwt -> SESSION_EXPIRED
-    AuthErrorCode.OtpExpired -> "Посилання з листа застаріло. Надішліть лист ще раз"
+    AuthErrorCode.OtpExpired -> OTP_INVALID_OR_EXPIRED
     AuthErrorCode.RequestTimeout -> "Сервер не відповідає. Спробуйте пізніше"
     else -> if (statusCode == 429) TOO_MANY_ATTEMPTS else fallback
 }
