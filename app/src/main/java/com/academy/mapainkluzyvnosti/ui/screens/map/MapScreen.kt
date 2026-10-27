@@ -346,8 +346,13 @@ fun MapScreen(
             onFormChange = addPlaceViewModel::onFormChange,
             onSubmit = { addPlaceViewModel.submit() },
             onChangeLocation = addPlaceViewModel::backToPicking,
-            onDismiss = addPlaceViewModel::cancel
+            onDismiss = addPlaceViewModel::cancel,
+            isResidentRequest = addPlaceViewModel.isResidentRequest
         )
+    }
+
+    if (addState.requestSubmitted) {
+        RequestSubmittedDialog(onDismiss = addPlaceViewModel::consumeRequestSubmitted)
     }
 
     if (addState.duplicates.isNotEmpty()) {

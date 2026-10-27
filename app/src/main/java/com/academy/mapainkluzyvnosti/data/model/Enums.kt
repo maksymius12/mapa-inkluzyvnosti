@@ -27,13 +27,40 @@ enum class AccessStatus {
 @Serializable
 enum class UserPurposeRole {
     @SerialName("resident") RESIDENT,
-    @SerialName("volunteer") VOLUNTEER
+    @SerialName("volunteer") VOLUNTEER,
+    /** Учень, який долучається як дослідник/рецензент (на відміну від вікової категорії). */
+    @SerialName("student") STUDENT
 }
 
 @Serializable
 enum class UserAgeGroup {
     @SerialName("student") STUDENT,
     @SerialName("adult") ADULT
+}
+
+/** Системна роль акаунта в застосунку: звичайний користувач чи адміністратор із повним доступом. */
+@Serializable
+enum class UserRole {
+    @SerialName("user") USER,
+    @SerialName("admin") ADMIN
+}
+
+/** Звідки користувач дізнався про застосунок — питається один раз при реєстрації. */
+@Serializable
+enum class ReferralSource {
+    @SerialName("school") SCHOOL,
+    @SerialName("friends") FRIENDS,
+    @SerialName("social_media") SOCIAL_MEDIA,
+    @SerialName("search") SEARCH,
+    @SerialName("other") OTHER
+}
+
+/** Статус заявки мешканця на нову локацію. */
+@Serializable
+enum class PlaceRequestStatus {
+    @SerialName("pending") PENDING,
+    @SerialName("approved") APPROVED,
+    @SerialName("rejected") REJECTED
 }
 
 @Serializable

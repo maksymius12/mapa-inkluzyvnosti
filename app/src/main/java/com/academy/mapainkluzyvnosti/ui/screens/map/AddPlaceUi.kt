@@ -153,7 +153,8 @@ fun AddPlaceSheet(
     onFormChange: (PlaceFormState) -> Unit,
     onSubmit: () -> Unit,
     onChangeLocation: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    isResidentRequest: Boolean = false
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -170,7 +171,11 @@ fun AddPlaceSheet(
         ) {
             Text(text = "Нове місце", style = MaterialTheme.typography.titleLarge)
             Text(
-                text = "Після додавання місце з'явиться на мапі зі статусом «Не перевірено».",
+                text = if (isResidentRequest) {
+                    "Заявку розгляне волонтер, учень або адміністратор — після схвалення місце з'явиться на мапі."
+                } else {
+                    "Після додавання місце з'явиться на мапі зі статусом «Не перевірено»."
+                },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
@@ -236,6 +241,19 @@ fun DuplicatePlacesDialog(places: List<Place>, onCancel: () -> Unit, onAddAnyway
         },
         confirmButton = { TextButton(onClick = onAddAnyway) { Text("Все одно додати") } },
         dismissButton = { TextButton(onClick = onCancel) { Text("Скасувати") } }
+    )
+}
+
+/** Мешканець подав заявку: місце з'явиться на мапі лише після розгляду волонтером/учнем/адміном. */
+@Composable
+fun RequestSubmittedDialog(onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Заявку надіслано") },
+        text = {
+            Text("Дякуємо! Заявку на нову локацію передано на розгляд волонтерам, учням та адміністратору. Статус можна перевірити в розділі «Мої заявки» у профілі.")
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Зрозуміло") } }
     )
 }
 

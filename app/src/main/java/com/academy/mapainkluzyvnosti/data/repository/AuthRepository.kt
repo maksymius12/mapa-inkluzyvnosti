@@ -1,6 +1,7 @@
 package com.academy.mapainkluzyvnosti.data.repository
 
 import com.academy.mapainkluzyvnosti.data.model.AppUser
+import com.academy.mapainkluzyvnosti.data.model.ReferralSource
 import com.academy.mapainkluzyvnosti.data.model.UserAgeGroup
 import com.academy.mapainkluzyvnosti.data.model.UserPurposeRole
 import com.academy.mapainkluzyvnosti.data.remote.dto.ProfileDto
@@ -58,6 +59,7 @@ class AuthRepository(private val client: SupabaseClient) {
         const val META_NAME = "name"
         const val META_PURPOSE_ROLE = "purpose_role"
         const val META_AGE_GROUP = "age_group"
+        const val META_REFERRAL_SOURCE = "referral_source"
     }
 
     val sessionStatus: StateFlow<SessionStatus> get() = client.auth.sessionStatus
@@ -128,7 +130,8 @@ class AuthRepository(private val client: SupabaseClient) {
         password: String,
         name: String,
         purposeRole: UserPurposeRole,
-        ageGroup: UserAgeGroup
+        ageGroup: UserAgeGroup,
+        referralSource: ReferralSource? = null
     ): SignUpResult {
         // redirectUrl = null: лист містить 6-значний код ({{ .Token }}), а не посилання з переходом.
         val user = client.auth.signUpWith(Email, redirectUrl = null) {
@@ -138,6 +141,7 @@ class AuthRepository(private val client: SupabaseClient) {
                 put(META_NAME, name)
                 put(META_PURPOSE_ROLE, purposeRole.apiValue)
                 put(META_AGE_GROUP, ageGroup.apiValue)
+                referralSource?.let { put(META_REFERRAL_SOURCE, it.apiValue) }
             }
         }
         val session = client.auth.currentSessionOrNull()
@@ -233,17 +237,37 @@ class AuthRepository(private val client: SupabaseClient) {
         )
     }
 
-    /** Зберігає вибір мети й вікової категорії з кроку 2 (перший вхід через Google). */
-    suspend fun confirmProfileRoles(status: ProfileStatus.NeedsRoles, purposeRole: UserPurposeRole, ageGroup: UserAgeGroup): AppUser {
+    /** Зберігає вибір мети, вікової категорії й джерела реєстрації з кроку 2 (перший вхід через Google). */
+    suspend fun confirmProfileRoles(
+        status: ProfileStatus.NeedsRoles,
+        purposeRole: UserPurposeRole,
+        ageGroup: UserAgeGroup,
+        referralSource: ReferralSource? = null
+    ): AppUser {
         if (status.profileExists) {
-            val updated = client.postgrest.from("profiles").update({
-                set("purpose_role", purposeRole)
-                set("age_group", ageGroup)
-                set("roles_confirmed", true)
-            }) {
-                select()
-                filter { eq("id", status.userId) }
-            }.decodeList<ProfileDto>()
+            val updated = try {
+                client.postgrest.from("profiles").update({
+                    set("purpose_role", purposeRole)
+                    set("age_group", ageGroup)
+                    set("roles_confirmed", true)
+                    referralSource?.let { set("referral_source", it.apiValue) }
+                }) {
+                    select()
+                    filter { eq("id", status.userId) }
+                }.decodeList<ProfileDto>()
+            } catch (e: PostgrestRestException) {
+                // PGRST204 — колонки referral_source ще немає (міграцію 20261027130000 не виконано).
+                if (e.code == "PGRST204") {
+                    client.postgrest.from("profiles").update({
+                        set("purpose_role", purposeRole)
+                        set("age_group", ageGroup)
+                        set("roles_confirmed", true)
+                    }) {
+                        select()
+                        filter { eq("id", status.userId) }
+                    }.decodeList<ProfileDto>()
+                } else throw e
+            }
             updated.firstOrNull()?.let { return it.toDomain(email = currentEmail) }
         }
         // Рядка в profiles немає — зберігаємо вибір у метадані акаунта (не таблиця, RLS не діє);
@@ -252,6 +276,7 @@ class AuthRepository(private val client: SupabaseClient) {
             data = buildJsonObject {
                 put(META_PURPOSE_ROLE, purposeRole.apiValue)
                 put(META_AGE_GROUP, ageGroup.apiValue)
+                referralSource?.let { put(META_REFERRAL_SOURCE, it.apiValue) }
             }
         }
         return AppUser(id = status.userId, name = status.name, purposeRole = purposeRole, ageGroup = ageGroup, email = currentEmail)
@@ -308,6 +333,7 @@ class AuthRepository(private val client: SupabaseClient) {
         name = name?.takeIf { it.isNotBlank() } ?: suggestedDisplayName() ?: DEFAULT_NAME,
         purposeRole = purposeRole,
         ageGroup = ageGroup,
+        role = role,
         points = points ?: 0,
         checksCount = checksCount ?: 0,
         email = email,
@@ -321,6 +347,17 @@ val UserPurposeRole.apiValue: String
     get() = when (this) {
         UserPurposeRole.RESIDENT -> "resident"
         UserPurposeRole.VOLUNTEER -> "volunteer"
+        UserPurposeRole.STUDENT -> "student"
+    }
+
+/** Значення колонки profiles.referral_source / ключа metadata. */
+val ReferralSource.apiValue: String
+    get() = when (this) {
+        ReferralSource.SCHOOL -> "school"
+        ReferralSource.FRIENDS -> "friends"
+        ReferralSource.SOCIAL_MEDIA -> "social_media"
+        ReferralSource.SEARCH -> "search"
+        ReferralSource.OTHER -> "other"
     }
 
 /** Значення колонки profiles.age_group / ключа metadata. */

@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.outlined.Sos
+import androidx.compose.material.icons.outlined.Assignment
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Person
@@ -68,6 +69,7 @@ fun ProfileScreen(
     onOpenSettings: () -> Unit,
     onOpenHelp: () -> Unit,
     onOpenTutorial: () -> Unit,
+    onOpenPlaceRequests: () -> Unit,
     onSignedOut: () -> Unit,
     viewModel: ProfileViewModel = koinViewModel()
 ) {
@@ -138,6 +140,13 @@ fun ProfileScreen(
             MenuRow(Icons.Outlined.Route, "Мої маршрути", onOpenRoutes)
             MenuRow(Icons.Outlined.FavoriteBorder, "Обране", onOpenFavorites)
             MenuRow(Icons.Outlined.NotificationsNone, "Повідомлення", onOpenNotifications)
+            if (!isDemoMode) {
+                MenuRow(
+                    Icons.Outlined.Assignment,
+                    if (user?.isReviewer == true) "Заявки на розгляд" else "Мої заявки",
+                    onOpenPlaceRequests
+                )
+            }
             MenuRow(Icons.Outlined.Settings, "Налаштування", onOpenSettings)
             MenuRow(Icons.Outlined.HelpOutline, "Допомога", { showHelp = true })
             MenuRow(Icons.Outlined.Info, "Про застосунок", { showAbout = true }, showDivider = false)

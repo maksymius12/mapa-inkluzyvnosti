@@ -5,6 +5,8 @@ data class AppUser(
     val name: String,
     val purposeRole: UserPurposeRole,
     val ageGroup: UserAgeGroup,
+    /** Системна роль (адмін має повний доступ до програми, окрім звичайних прав purposeRole). */
+    val role: UserRole = UserRole.USER,
     val points: Int = 0,
     val checksCount: Int = 0,
     val email: String? = null,
@@ -15,4 +17,9 @@ data class AppUser(
     val rolesNeedReview: Boolean = false,
     /** Інструктаж уже переглянуто (прапорець із profiles, переживає перевстановлення). */
     val onboardingDone: Boolean = false
-)
+) {
+    val isAdmin: Boolean get() = role == UserRole.ADMIN
+
+    /** Може розглядати заявки мешканців: волонтер, учень (мета користування) або адмін. */
+    val isReviewer: Boolean get() = isAdmin || purposeRole == UserPurposeRole.VOLUNTEER || purposeRole == UserPurposeRole.STUDENT
+}

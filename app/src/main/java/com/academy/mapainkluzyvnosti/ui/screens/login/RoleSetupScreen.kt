@@ -21,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.academy.mapainkluzyvnosti.ui.components.PrimaryButton
+import com.academy.mapainkluzyvnosti.ui.components.ReferralSourceSelector
 import com.academy.mapainkluzyvnosti.ui.components.RoleAndAgeSelector
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -66,6 +67,12 @@ fun RoleSetupScreen(
             ageGroup = uiState.ageGroup,
             onAgeGroupChange = viewModel::onAgeGroupChange,
             enabled = !uiState.isSaving
+        )
+        ReferralSourceSelector(
+            value = uiState.referralSource,
+            onChange = viewModel::onReferralSourceChange,
+            enabled = !uiState.isSaving,
+            modifier = Modifier.padding(top = 20.dp)
         )
         PrimaryButton(
             text = "Продовжити",

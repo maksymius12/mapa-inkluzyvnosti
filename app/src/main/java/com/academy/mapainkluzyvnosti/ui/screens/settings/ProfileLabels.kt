@@ -6,6 +6,7 @@ import com.academy.mapainkluzyvnosti.data.model.UserPurposeRole
 fun purposeRoleLabel(role: UserPurposeRole): String = when (role) {
     UserPurposeRole.RESIDENT -> "Мешканець"
     UserPurposeRole.VOLUNTEER -> "Волонтер"
+    UserPurposeRole.STUDENT -> "Учень"
 }
 
 fun ageGroupLabel(group: UserAgeGroup): String = when (group) {

@@ -2,6 +2,7 @@ package com.academy.mapainkluzyvnosti.data.remote.dto
 
 import com.academy.mapainkluzyvnosti.data.model.UserAgeGroup
 import com.academy.mapainkluzyvnosti.data.model.UserPurposeRole
+import com.academy.mapainkluzyvnosti.data.model.UserRole
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -16,6 +17,8 @@ data class ProfileDto(
     val name: String? = null,
     @SerialName("purpose_role") val purposeRole: UserPurposeRole = UserPurposeRole.RESIDENT,
     @SerialName("age_group") val ageGroup: UserAgeGroup = UserAgeGroup.ADULT,
+    /** Системна роль — "user" чи "admin" (повний доступ). Колонки може не бути до відповідної міграції. */
+    val role: UserRole = UserRole.USER,
     val points: Int? = null,
     @SerialName("checks_count") val checksCount: Int? = null,
     /** false — мету й вікову категорію ще не обирали (перший вхід через Google). */
