@@ -4,8 +4,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.academy.mapainkluzyvnosti.data.model.GeoPoint
 import com.academy.mapainkluzyvnosti.data.model.Place
+import com.academy.mapainkluzyvnosti.data.model.UserPurposeRole
 import com.academy.mapainkluzyvnosti.data.remote.NominatimApi
 import com.academy.mapainkluzyvnosti.data.remote.toUserMessage
+import com.academy.mapainkluzyvnosti.data.repository.PlaceRequestRepository
 import com.academy.mapainkluzyvnosti.data.repository.UserPlaceRepository
 import com.academy.mapainkluzyvnosti.domain.usecase.isInsideAnyRing
 import com.academy.mapainkluzyvnosti.ui.components.PlaceFormState
@@ -30,6 +32,8 @@ data class AddPlaceUiState(
     val duplicates: List<Place> = emptyList(),
     /** Щойно створене місце — для повідомлення «Місце додано» й переходу до перевірки. */
     val createdPlace: Place? = null,
+    /** Мешканець подав заявку (а не додав місце напряму) — показується окреме повідомлення. */
+    val requestSubmitted: Boolean = false,
     val showDemoGate: Boolean = false,
     /** Помилка збереження — показується в самій панелі форми. */
     val submitError: String? = null,
@@ -40,6 +44,7 @@ data class AddPlaceUiState(
 /** Сценарій «+ Додати місце»: вибір позиції на мапі -> форма -> перевірка дублів -> збереження. */
 class AddPlaceViewModel(
     private val userPlaceRepository: UserPlaceRepository,
+    private val placeRequestRepository: PlaceRequestRepository,
     private val nominatimApi: NominatimApi,
     private val currentUserStore: CurrentUserStore,
     private val demoModeStore: DemoModeStore
@@ -49,6 +54,9 @@ class AddPlaceViewModel(
     val uiState: StateFlow<AddPlaceUiState> = _uiState.asStateFlow()
 
     private var addressJob: Job? = null
+
+    /** Мешканці подають заявку на розгляд замість додавання місця напряму. */
+    val isResidentRequest: Boolean get() = currentUserStore.user.value?.purposeRole == UserPurposeRole.RESIDENT
 
     /** Додавати можуть лише авторизовані: гостю (або без сесії) — діалог із пропозицією увійти. */
     fun startPicking(): Boolean {
@@ -128,6 +136,28 @@ class AddPlaceViewModel(
                     return@launch
                 }
             }
+            // Мешканці подають заявку на розгляд; волонтери, учні й адмін додають місце напряму.
+            val isResident = currentUserStore.user.value?.purposeRole == UserPurposeRole.RESIDENT
+            if (isResident) {
+                runCatching {
+                    placeRequestRepository.submit(
+                        name = form.name,
+                        address = form.address,
+                        category = category,
+                        lat = location.lat,
+                        lng = location.lng,
+                        note = null
+                    )
+                }.onSuccess {
+                    addressJob?.cancel()
+                    _uiState.value = AddPlaceUiState(requestSubmitted = true)
+                }.onFailure { e ->
+                    _uiState.update {
+                        it.copy(isSubmitting = false, submitError = e.toUserMessage("Не вдалося надіслати заявку. Спробуйте ще раз"))
+                    }
+                }
+                return@launch
+            }
             runCatching {
                 userPlaceRepository.createPlace(
                     authorId = authorId,
@@ -149,6 +179,7 @@ class AddPlaceViewModel(
     }
 
     fun consumeCreatedPlace() = _uiState.update { it.copy(createdPlace = null) }
+    fun consumeRequestSubmitted() = _uiState.update { it.copy(requestSubmitted = false) }
 
     fun consumeMessage() = _uiState.update { it.copy(message = null) }
 }

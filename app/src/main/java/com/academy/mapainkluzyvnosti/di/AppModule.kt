@@ -10,6 +10,7 @@ import com.academy.mapainkluzyvnosti.data.repository.AuthRepository
 import com.academy.mapainkluzyvnosti.data.repository.CheckRepository
 import com.academy.mapainkluzyvnosti.data.repository.FavoriteRepository
 import com.academy.mapainkluzyvnosti.data.repository.PlaceRepository
+import com.academy.mapainkluzyvnosti.data.repository.PlaceRequestRepository
 import com.academy.mapainkluzyvnosti.data.repository.SosRepository
 import com.academy.mapainkluzyvnosti.data.repository.UserPlaceRepository
 import com.academy.mapainkluzyvnosti.domain.usecase.BuildRoute
@@ -24,6 +25,7 @@ import com.academy.mapainkluzyvnosti.ui.screens.login.SignUpViewModel
 import com.academy.mapainkluzyvnosti.ui.screens.map.AddPlaceViewModel
 import com.academy.mapainkluzyvnosti.ui.screens.map.MapViewModel
 import com.academy.mapainkluzyvnosti.ui.screens.photoupload.PhotoUploadViewModel
+import com.academy.mapainkluzyvnosti.ui.screens.requests.PlaceRequestsViewModel
 import com.academy.mapainkluzyvnosti.ui.screens.placedetail.PlaceDetailViewModel
 import com.academy.mapainkluzyvnosti.ui.screens.notifications.NotificationsViewModel
 import com.academy.mapainkluzyvnosti.ui.screens.profile.ProfileViewModel
@@ -61,6 +63,7 @@ val repositoryModule = module {
     single { FavoriteRepository(get()) }
     single { SosRepository(get()) }
     single { UserPlaceRepository(get(), get()) }
+    single { PlaceRequestRepository(get()) }
 }
 
 val useCaseModule = module {
@@ -89,7 +92,8 @@ val viewModelModule = module {
     }
     viewModel { RoleSetupViewModel(get(), get()) }
     viewModel { MapViewModel(get(), get(), get(), get(), get()) }
-    viewModel { AddPlaceViewModel(get(), get(), get(), get()) }
+    viewModel { AddPlaceViewModel(get(), get(), get(), get(), get()) }
+    viewModel { PlaceRequestsViewModel(get(), get()) }
     viewModel { SearchViewModel(get()) }
     viewModel { FiltersViewModel(get()) }
     viewModel { (placeId: String) -> PlaceDetailViewModel(placeId, get(), get(), get(), get(), get()) }

@@ -3,6 +3,7 @@ package com.academy.mapainkluzyvnosti.ui.screens.login
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.academy.mapainkluzyvnosti.data.model.AppUser
+import com.academy.mapainkluzyvnosti.data.model.ReferralSource
 import com.academy.mapainkluzyvnosti.data.model.UserAgeGroup
 import com.academy.mapainkluzyvnosti.data.model.UserPurposeRole
 import com.academy.mapainkluzyvnosti.data.remote.EMAIL_ALREADY_REGISTERED
@@ -42,6 +43,7 @@ data class SignUpUiState(
     // Крок 2
     val purposeRole: UserPurposeRole = UserPurposeRole.RESIDENT,
     val ageGroup: UserAgeGroup = UserAgeGroup.ADULT,
+    val referralSource: ReferralSource? = null,
     val isSubmitting: Boolean = false,
     val errorMessage: String? = null,
     /** Код надіслано на цю пошту — відкрити екран «Введіть код» (одноразова подія). */
@@ -71,6 +73,7 @@ class SignUpViewModel(
     fun onTermsChange(value: Boolean) = _uiState.update { it.copy(acceptedTerms = value, termsError = null) }
     fun onPurposeRoleChange(value: UserPurposeRole) = _uiState.update { it.copy(purposeRole = value) }
     fun onAgeGroupChange(value: UserAgeGroup) = _uiState.update { it.copy(ageGroup = value) }
+    fun onReferralSourceChange(value: ReferralSource) = _uiState.update { it.copy(referralSource = value) }
 
     /** Крок 1 -> крок 2 після перевірки полів. */
     fun next() {
@@ -124,7 +127,8 @@ class SignUpViewModel(
                     password = state.password,
                     name = state.name.trim(),
                     purposeRole = state.purposeRole,
-                    ageGroup = state.ageGroup
+                    ageGroup = state.ageGroup,
+                    referralSource = state.referralSource
                 )
             }.onSuccess { result ->
                 when (result) {

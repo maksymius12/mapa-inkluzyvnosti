@@ -30,6 +30,7 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.academy.mapainkluzyvnosti.ui.components.PrimaryButton
+import com.academy.mapainkluzyvnosti.ui.components.ReferralSourceSelector
 import com.academy.mapainkluzyvnosti.ui.components.RoleAndAgeSelector
 import com.academy.mapainkluzyvnosti.ui.components.ScreenHeader
 import com.academy.mapainkluzyvnosti.ui.components.SecondaryButton
@@ -174,6 +175,12 @@ private fun RolesStep(uiState: SignUpUiState, viewModel: SignUpViewModel) {
         ageGroup = uiState.ageGroup,
         onAgeGroupChange = viewModel::onAgeGroupChange,
         enabled = !uiState.isSubmitting
+    )
+    ReferralSourceSelector(
+        value = uiState.referralSource,
+        onChange = viewModel::onReferralSourceChange,
+        enabled = !uiState.isSubmitting,
+        modifier = Modifier.padding(top = 20.dp)
     )
     Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(top = 24.dp)) {
         PrimaryButton(text = "Зареєструватись", onClick = viewModel::submit, loading = uiState.isSubmitting)

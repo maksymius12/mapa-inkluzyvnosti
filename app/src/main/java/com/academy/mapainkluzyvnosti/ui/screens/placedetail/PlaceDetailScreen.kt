@@ -274,7 +274,7 @@ fun PlaceDetailScreen(
                                         onClick = onOpenPhotoUpload
                                     )
                                 }
-                                if (uiState.isOwnPlace) {
+                                if (uiState.canManagePlace) {
                                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                         SecondaryButton(
                                             text = "Змінити",

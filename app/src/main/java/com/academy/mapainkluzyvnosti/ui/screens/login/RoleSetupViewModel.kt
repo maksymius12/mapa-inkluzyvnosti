@@ -2,6 +2,7 @@ package com.academy.mapainkluzyvnosti.ui.screens.login
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.academy.mapainkluzyvnosti.data.model.ReferralSource
 import com.academy.mapainkluzyvnosti.data.model.UserAgeGroup
 import com.academy.mapainkluzyvnosti.data.model.UserPurposeRole
 import com.academy.mapainkluzyvnosti.data.remote.toUserMessage
@@ -18,6 +19,7 @@ data class RoleSetupUiState(
     val name: String = "",
     val purposeRole: UserPurposeRole = UserPurposeRole.RESIDENT,
     val ageGroup: UserAgeGroup = UserAgeGroup.ADULT,
+    val referralSource: ReferralSource? = null,
     val isLoading: Boolean = true,
     val isSaving: Boolean = false,
     val errorMessage: String? = null,
@@ -69,6 +71,7 @@ class RoleSetupViewModel(
 
     fun onPurposeRoleChange(value: UserPurposeRole) = _uiState.update { it.copy(purposeRole = value) }
     fun onAgeGroupChange(value: UserAgeGroup) = _uiState.update { it.copy(ageGroup = value) }
+    fun onReferralSourceChange(value: ReferralSource) = _uiState.update { it.copy(referralSource = value) }
 
     fun save() {
         val status = pending ?: return load()
@@ -76,7 +79,9 @@ class RoleSetupViewModel(
         if (state.isSaving) return
         viewModelScope.launch {
             _uiState.update { it.copy(isSaving = true, errorMessage = null) }
-            runCatching { authRepository.confirmProfileRoles(status, state.purposeRole, state.ageGroup) }
+            runCatching {
+                authRepository.confirmProfileRoles(status, state.purposeRole, state.ageGroup, state.referralSource)
+            }
                 .onSuccess { user ->
                     currentUserStore.set(user)
                     _uiState.update { it.copy(isSaving = false, isDone = true) }

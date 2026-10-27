@@ -51,6 +51,10 @@ data class PlaceDetailUiState(
     val isOwnPlace: Boolean
         get() = place?.isUserAdded == true && currentUser != null && place.createdBy == currentUser.id
 
+    /** Адмін має full доступ: редагує й видаляє будь-яке місце, не лише власне. */
+    val canManagePlace: Boolean
+        get() = isOwnPlace || currentUser?.isAdmin == true
+
     /** Поскаржитися можна на чуже додане користувачем місце (гостю — діалог гейту). */
     val canReport: Boolean get() = place?.isUserAdded == true && !isOwnPlace
 }
@@ -113,7 +117,7 @@ class PlaceDetailViewModel(
     fun startEdit() {
         val state = _uiState.value
         val place = state.place ?: return
-        if (!state.isOwnPlace) return
+        if (!state.canManagePlace) return
         _uiState.update {
             it.copy(
                 editForm = PlaceFormState(name = place.name, category = place.category, address = place.address),
@@ -128,7 +132,7 @@ class PlaceDetailViewModel(
 
     fun saveEdit() {
         val state = _uiState.value
-        if (state.isSaving || !state.isOwnPlace) return
+        if (state.isSaving || !state.canManagePlace) return
         val form = state.editForm?.copy(showErrors = true) ?: return
         _uiState.update { it.copy(editForm = form, editError = null) }
         if (!form.isValid) return
@@ -151,14 +155,14 @@ class PlaceDetailViewModel(
     // ---- Видалення власного місця ----
 
     fun requestDelete() {
-        if (_uiState.value.isOwnPlace) _uiState.update { it.copy(showDeleteConfirm = true) }
+        if (_uiState.value.canManagePlace) _uiState.update { it.copy(showDeleteConfirm = true) }
     }
 
     fun dismissDelete() = _uiState.update { it.copy(showDeleteConfirm = false) }
 
     fun confirmDelete() {
         val state = _uiState.value
-        if (state.isDeleting || !state.isOwnPlace) return
+        if (state.isDeleting || !state.canManagePlace) return
         viewModelScope.launch {
             _uiState.update { it.copy(isDeleting = true) }
             runCatching { userPlaceRepository.deletePlace(placeId) }

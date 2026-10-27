@@ -26,6 +26,8 @@ object Routes {
     const val PROFILE = "profile"
     const val SETTINGS = "settings"
     const val NOTIFICATIONS = "notifications"
+    /** Заявки на нові локації: черга на розгляд (рецензент) або власні заявки (мешканець). */
+    const val PLACE_REQUESTS = "place_requests"
 
     const val FAVORITES_TAB_PLACES = "places"
     const val FAVORITES_TAB_ROUTES = "routes"

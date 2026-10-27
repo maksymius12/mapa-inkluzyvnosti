@@ -35,6 +35,7 @@ import com.academy.mapainkluzyvnosti.ui.screens.notifications.NotificationsScree
 import com.academy.mapainkluzyvnosti.ui.screens.photoupload.PhotoUploadScreen
 import com.academy.mapainkluzyvnosti.ui.screens.placedetail.PlaceDetailScreen
 import com.academy.mapainkluzyvnosti.ui.screens.profile.ProfileScreen
+import com.academy.mapainkluzyvnosti.ui.screens.requests.PlaceRequestsScreen
 import com.academy.mapainkluzyvnosti.ui.screens.quickcheck.QuickCheckScreen
 import com.academy.mapainkluzyvnosti.ui.screens.route.RouteScreen
 import com.academy.mapainkluzyvnosti.ui.screens.search.SearchScreen
@@ -275,8 +276,12 @@ fun MapaNavHost(startRoute: String) {
                     onOpenSettings = { navController.navigate(Routes.SETTINGS) },
                     onOpenHelp = { navController.navigate(Routes.SOS_REQUEST) },
                     onOpenTutorial = { navController.navigate(Routes.tutorial(tutorialMode(koinTutorial))) },
+                    onOpenPlaceRequests = { navController.navigate(Routes.PLACE_REQUESTS) },
                     onSignedOut = { goToLogin() }
                 )
+            }
+            composable(Routes.PLACE_REQUESTS) {
+                PlaceRequestsScreen(onBack = { navController.popBackStack() })
             }
             composable(Routes.SETTINGS) {
                 SettingsScreen(
