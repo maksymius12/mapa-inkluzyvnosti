@@ -8,6 +8,9 @@ import com.academy.mapainkluzyvnosti.data.remote.dto.PlaceRequestDto
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Order
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
@@ -15,6 +18,8 @@ import kotlinx.serialization.json.put
  * Заявки мешканців на нові локації: подача (мешканець), черга на розгляд і рішення
  * (волонтер/учень/адмін — RLS і RPC на сервері перевіряють права самі).
  */
+private val rowJson = Json { ignoreUnknownKeys = true }
+
 class PlaceRequestRepository(private val client: SupabaseClient) {
 
     /** Подати заявку — лише для мешканців (інші додають місце напряму через UserPlaceRepository). */
@@ -37,7 +42,7 @@ class PlaceRequestRepository(private val client: SupabaseClient) {
                     put("p_lng", lng)
                     note?.takeIf { it.isNotBlank() }?.let { put("p_note", it) }
                 }
-            ).decodeSingle<PlaceRequestDto>().toDomain()
+            ).decodeAs<JsonElement>().let(::singleRow).toDomain()
         } catch (e: Exception) {
             SupabaseErrorLog.log("POST /rest/v1/rpc/submit_place_request", e, params)
             throw e
@@ -86,6 +91,16 @@ class PlaceRequestRepository(private val client: SupabaseClient) {
     }
 
     private fun categoryApiValue(category: PlaceCategory): String = category.name.lowercase()
+
+    /**
+     * submit_place_request повертає один рядок (returns place_requests, не setof), і PostgREST віддає
+     * JSON-об'єкт, а не масив — decodeSingle() (= decodeList().first()) на ньому падав, хоча заявку вже
+     * створено. Приймаємо обидві форми.
+     */
+    private fun singleRow(json: JsonElement): PlaceRequestDto {
+        val row = if (json is JsonArray) json.first() else json
+        return rowJson.decodeFromJsonElement(PlaceRequestDto.serializer(), row)
+    }
 
     private fun PlaceRequestDto.toDomain() = PlaceRequest(
         id = id,
