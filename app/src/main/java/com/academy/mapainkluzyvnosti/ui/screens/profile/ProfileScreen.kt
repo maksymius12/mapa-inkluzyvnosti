@@ -19,7 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.outlined.Sos
-import androidx.compose.material.icons.outlined.Assignment
+import androidx.compose.material.icons.automirrored.outlined.Assignment
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Person
@@ -142,7 +142,7 @@ fun ProfileScreen(
             MenuRow(Icons.Outlined.NotificationsNone, "Повідомлення", onOpenNotifications)
             if (!isDemoMode) {
                 MenuRow(
-                    Icons.Outlined.Assignment,
+                    Icons.AutoMirrored.Outlined.Assignment,
                     if (user?.isReviewer == true) "Заявки на розгляд" else "Мої заявки",
                     onOpenPlaceRequests
                 )
