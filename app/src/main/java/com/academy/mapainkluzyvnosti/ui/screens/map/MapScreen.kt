@@ -72,7 +72,6 @@ import com.academy.mapainkluzyvnosti.ui.components.OpenDataTag
 import com.academy.mapainkluzyvnosti.ui.components.PlaceThumbnail
 import com.academy.mapainkluzyvnosti.ui.components.PrimaryButton
 import com.academy.mapainkluzyvnosti.ui.components.RatingRow
-import com.academy.mapainkluzyvnosti.ui.components.SosHelpButton
 import com.academy.mapainkluzyvnosti.ui.components.SosInfoCard
 import com.academy.mapainkluzyvnosti.ui.components.StatusBadge
 import com.academy.mapainkluzyvnosti.ui.components.visual
@@ -111,7 +110,6 @@ fun MapScreen(
     onOpenPlace: (String) -> Unit,
     onOpenSearch: () -> Unit,
     onOpenFilters: () -> Unit,
-    onOpenSos: () -> Unit,
     onOpenQuickCheck: (String) -> Unit,
     onRequestLogin: () -> Unit,
     viewModel: MapViewModel = koinViewModel(),
@@ -427,18 +425,16 @@ fun MapScreen(
             }
         }
 
-        // Низ: «Додати місце» і SOS зліва, «моє місце» й масштаб справа, під ними — картка вибраного місця/SOS.
+        // Низ: «Додати місце» зліва, «моє місце» й масштаб справа, під ними — картка вибраного місця/SOS.
         if (!isPickingLocation) Column(modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
             Row(
                 verticalAlignment = Alignment.Bottom,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    AddPlaceButton(onClick = {
-                        if (addPlaceViewModel.startPicking()) viewModel.clearSelection()
-                    })
-                    SosHelpButton(onClick = onOpenSos)
-                }
+                // Запит допомоги (SOS) — у нижній панелі навігації, а не плаваючою кнопкою над мапою.
+                AddPlaceButton(onClick = {
+                    if (addPlaceViewModel.startPicking()) viewModel.clearSelection()
+                })
                 Spacer(Modifier.weight(1f))
                 Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     MapControlButton(

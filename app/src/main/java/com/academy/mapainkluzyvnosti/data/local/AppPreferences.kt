@@ -3,6 +3,7 @@ package com.academy.mapainkluzyvnosti.data.local
 import android.content.Context
 import com.academy.mapainkluzyvnosti.data.model.AccessibilityType
 import com.academy.mapainkluzyvnosti.data.model.PlaceCategory
+import com.academy.mapainkluzyvnosti.data.model.decodeStoredCategories
 
 /** Прапорці запуску (екран привітання, гостьовий режим) та стан фільтрів мапи — переживають рестарт. */
 object AppPreferences {
@@ -11,6 +12,7 @@ object AppPreferences {
     private const val KEY_ONBOARDING_SEEN = "onboarding_seen"
     private const val KEY_GUEST = "guest_mode"
     private const val KEY_FILTER_CATEGORIES = "filter_categories"
+    private const val KEY_FILTER_CATEGORIES_KNOWN = "filter_categories_known"
     private const val KEY_FILTER_TYPES = "filter_types"
 
     fun isOnboardingSeen(context: Context): Boolean = prefs(context).getBoolean(KEY_ONBOARDING_SEEN, false)
@@ -28,8 +30,7 @@ object AppPreferences {
     /** null — фільтр ще ніколи не зберігався. */
     fun loadFilterCategories(context: Context): Set<PlaceCategory>? =
         prefs(context).getStringSet(KEY_FILTER_CATEGORIES, null)
-            ?.mapNotNull { name -> runCatching { PlaceCategory.valueOf(name) }.getOrNull() }
-            ?.toSet()
+            ?.let { decodeStoredCategories(it, prefs(context).getStringSet(KEY_FILTER_CATEGORIES_KNOWN, null)) }
 
     fun loadFilterTypes(context: Context): Set<AccessibilityType>? =
         prefs(context).getStringSet(KEY_FILTER_TYPES, null)
@@ -39,6 +40,7 @@ object AppPreferences {
     fun saveFilters(context: Context, categories: Set<PlaceCategory>, types: Set<AccessibilityType>) {
         prefs(context).edit()
             .putStringSet(KEY_FILTER_CATEGORIES, categories.map { it.name }.toSet())
+            .putStringSet(KEY_FILTER_CATEGORIES_KNOWN, PlaceCategory.entries.map { it.name }.toSet())
             .putStringSet(KEY_FILTER_TYPES, types.map { it.name }.toSet())
             .apply()
     }

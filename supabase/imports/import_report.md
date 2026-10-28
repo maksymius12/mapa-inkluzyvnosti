@@ -20,15 +20,20 @@
 - partial: 71
 
 ## Категорії
-- education: 102
-- culture: 70
+- education: 101
+- culture: 37
+- library: 35
 - services: 65
 - shop: 44
 - health: 27
 - cafe: 18
-- admin: 16
+- admin: 13
+- cnap: 2
 - transit: 16
 - sport: 5
+
+(library і cnap виділено за назвою після генерації — див. TITLE_RULES у tools/opendata_import/mapping.py
+і міграцію 20261028130000_place_categories_library_cnap.sql.)
 
 ## Пропущено
 

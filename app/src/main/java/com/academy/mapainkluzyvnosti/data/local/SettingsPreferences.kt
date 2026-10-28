@@ -2,6 +2,7 @@ package com.academy.mapainkluzyvnosti.data.local
 
 import android.content.Context
 import com.academy.mapainkluzyvnosti.data.model.PlaceCategory
+import com.academy.mapainkluzyvnosti.data.model.decodeStoredCategories
 
 /** Сирі SharedPreferences для персоналізації — читаються один раз при старті [com.academy.mapainkluzyvnosti.ui.state.SettingsStore]. */
 object SettingsPreferences {
@@ -11,6 +12,7 @@ object SettingsPreferences {
     private const val KEY_ROUTE_NOTIFICATIONS = "route_notifications_enabled"
     private const val KEY_LARGE_TEXT = "large_text_enabled"
     private const val KEY_DEFAULT_CATEGORIES = "default_categories"
+    private const val KEY_DEFAULT_CATEGORIES_KNOWN = "default_categories_known"
 
     data class Snapshot(
         val sosNotificationsEnabled: Boolean,
@@ -23,8 +25,7 @@ object SettingsPreferences {
         val prefs = prefs(context)
         val storedCategories = prefs.getStringSet(KEY_DEFAULT_CATEGORIES, null)
         val defaultCategories = storedCategories
-            ?.mapNotNull { name -> runCatching { PlaceCategory.valueOf(name) }.getOrNull() }
-            ?.toSet()
+            ?.let { decodeStoredCategories(it, prefs.getStringSet(KEY_DEFAULT_CATEGORIES_KNOWN, null)) }
             ?: PlaceCategory.entries.toSet()
         return Snapshot(
             sosNotificationsEnabled = prefs.getBoolean(KEY_SOS_NOTIFICATIONS, true),
@@ -47,7 +48,10 @@ object SettingsPreferences {
     }
 
     fun saveDefaultCategories(context: Context, categories: Set<PlaceCategory>) {
-        prefs(context).edit().putStringSet(KEY_DEFAULT_CATEGORIES, categories.map { it.name }.toSet()).apply()
+        prefs(context).edit()
+            .putStringSet(KEY_DEFAULT_CATEGORIES, categories.map { it.name }.toSet())
+            .putStringSet(KEY_DEFAULT_CATEGORIES_KNOWN, PlaceCategory.entries.map { it.name }.toSet())
+            .apply()
     }
 
     private fun prefs(context: Context) =

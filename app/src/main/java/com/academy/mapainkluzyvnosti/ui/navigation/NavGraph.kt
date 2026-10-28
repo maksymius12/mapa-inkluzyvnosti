@@ -35,6 +35,7 @@ import com.academy.mapainkluzyvnosti.ui.screens.notifications.NotificationsScree
 import com.academy.mapainkluzyvnosti.ui.screens.photoupload.PhotoUploadScreen
 import com.academy.mapainkluzyvnosti.ui.screens.placedetail.PlaceDetailScreen
 import com.academy.mapainkluzyvnosti.ui.screens.profile.ProfileScreen
+import com.academy.mapainkluzyvnosti.ui.screens.admin.AdminUsersScreen
 import com.academy.mapainkluzyvnosti.ui.screens.requests.PlaceRequestsScreen
 import com.academy.mapainkluzyvnosti.ui.screens.quickcheck.QuickCheckScreen
 import com.academy.mapainkluzyvnosti.ui.screens.route.RouteScreen
@@ -95,7 +96,8 @@ fun MapaNavHost(startRoute: String) {
                         BottomNavEntry("Профіль", Icons.Filled.Person, selected(Routes.PROFILE)) {
                             navController.switchTab(Routes.PROFILE)
                         }
-                    )
+                    ),
+                    onSos = { navController.navigate(Routes.SOS_REQUEST) }
                 )
             }
         }
@@ -236,7 +238,6 @@ fun MapaNavHost(startRoute: String) {
                     onOpenPlace = { placeId -> navController.navigate(Routes.placeDetail(placeId)) },
                     onOpenSearch = { navController.navigate(Routes.SEARCH) },
                     onOpenFilters = { navController.navigate(Routes.FILTERS) },
-                    onOpenSos = { navController.navigate(Routes.SOS_REQUEST) },
                     onOpenQuickCheck = { placeId -> navController.navigate(Routes.quickCheck(placeId)) },
                     onRequestLogin = { goToLogin() }
                 )
@@ -277,11 +278,15 @@ fun MapaNavHost(startRoute: String) {
                     onOpenHelp = { navController.navigate(Routes.SOS_REQUEST) },
                     onOpenTutorial = { navController.navigate(Routes.tutorial(tutorialMode(koinTutorial))) },
                     onOpenPlaceRequests = { navController.navigate(Routes.PLACE_REQUESTS) },
+                    onOpenAdmin = { navController.navigate(Routes.ADMIN_USERS) },
                     onSignedOut = { goToLogin() }
                 )
             }
             composable(Routes.PLACE_REQUESTS) {
                 PlaceRequestsScreen(onBack = { navController.popBackStack() })
+            }
+            composable(Routes.ADMIN_USERS) {
+                AdminUsersScreen(onBack = { navController.popBackStack() })
             }
             composable(Routes.SETTINGS) {
                 SettingsScreen(

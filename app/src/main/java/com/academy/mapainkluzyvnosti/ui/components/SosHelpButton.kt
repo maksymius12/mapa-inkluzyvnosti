@@ -11,8 +11,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -39,7 +41,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -50,18 +51,23 @@ private val SosRed = Color(0xFFFF3D3D)
 private val SosGlow = Color(0xFFFF4D4D)
 
 /** Темне «гало» навколо білих літер: за WCAG 1.4.3 широке гало вважається тлом тексту → достатній контраст. */
-private val TextHalo = Shadow(color = Color(0xCC5A0A0A), offset = Offset.Zero, blurRadius = 10f)
+private val TextHalo = Shadow(color = Color(0xCC5A0A0A), offset = Offset.Zero, blurRadius = 8f)
 
 private const val RING_CYCLE_MS = 1100
-private const val RING_MAX_SCALE = 2.5f
+private const val SOS_DESCRIPTION = "Кнопка запиту допомоги. Відкриває запит до волонтерів"
 
 /**
- * Кнопка запиту допомоги в стилі промо-відео: червоний градієнтний круг із «SOS» і «Потрібна допомога»,
- * м'яке світіння й два кільця, що розходяться. Лише вигляд — дія та сама ([onClick]).
- * Навмисно без вібрації: в застосунку вібровідгуку ніде немає.
+ * Червоне градієнтне коло «SOS» зі світінням і кільцями, що розходяться (до [ringMaxScale]).
+ * Якщо анімації вимкнено в системі, кільця статичні й напівпрозорі.
  */
 @Composable
-fun SosHelpButton(onClick: () -> Unit, modifier: Modifier = Modifier, diameter: Dp = 150.dp) {
+private fun SosCircle(
+    onClick: () -> Unit,
+    diameter: Dp,
+    ringMaxScale: Float,
+    glowRadius: Dp,
+    modifier: Modifier = Modifier
+) {
     val reducedMotion = rememberReducedMotion()
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
@@ -79,102 +85,108 @@ fun SosHelpButton(onClick: () -> Unit, modifier: Modifier = Modifier, diameter: 
         ).value
     }
 
-    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier
-                .size(diameter)
-                // Світіння й кільця малюються поза межами кола й не стискаються при натисканні.
-                .drawBehind {
-                    val radius = size.minDimension / 2f
-                    val glowRadius = radius + 40.dp.toPx()
-                    drawCircle(
-                        Brush.radialGradient(
-                            0f to SosGlow.copy(alpha = 0.65f),
-                            radius / glowRadius to SosGlow.copy(alpha = 0.65f),
-                            1f to Color.Transparent,
-                            center = center,
-                            radius = glowRadius
-                        ),
-                        radius = glowRadius
-                    )
-                    val stroke = Stroke(width = 3.dp.toPx())
-                    if (ringPhase == null) {
-                        // Анімації вимкнено в системі: кільця статичні й напівпрозорі.
-                        drawCircle(SosGlow.copy(alpha = 0.35f), radius = radius * 1.35f, style = stroke)
-                        drawCircle(SosGlow.copy(alpha = 0.35f), radius = radius * 1.75f, style = stroke)
-                    } else {
-                        for (phase in listOf(ringPhase, (ringPhase + 0.5f) % 1f)) {
-                            val scale = 1f + (RING_MAX_SCALE - 1f) * phase
-                            drawCircle(SosGlow.copy(alpha = 0.7f * (1f - phase)), radius = radius * scale, style = stroke)
-                        }
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = modifier
+            .size(diameter)
+            // Світіння й кільця — поза межами кола, не стискаються при натисканні.
+            .drawBehind {
+                val radius = size.minDimension / 2f
+                val glow = radius + glowRadius.toPx()
+                drawCircle(
+                    Brush.radialGradient(
+                        0f to SosGlow.copy(alpha = 0.6f),
+                        radius / glow to SosGlow.copy(alpha = 0.6f),
+                        1f to Color.Transparent,
+                        center = center,
+                        radius = glow
+                    ),
+                    radius = glow
+                )
+                val stroke = Stroke(width = 2.dp.toPx())
+                if (ringPhase == null) {
+                    drawCircle(SosGlow.copy(alpha = 0.35f), radius = radius * (1f + (ringMaxScale - 1f) * 0.5f), style = stroke)
+                } else {
+                    for (phase in listOf(ringPhase, (ringPhase + 0.5f) % 1f)) {
+                        val scale = 1f + (ringMaxScale - 1f) * phase
+                        drawCircle(SosGlow.copy(alpha = 0.7f * (1f - phase)), radius = radius * scale, style = stroke)
                     }
                 }
-                .graphicsLayer {
-                    scaleX = pressScale
-                    scaleY = pressScale
-                }
-                .clip(CircleShape)
-                .background(
-                    Brush.radialGradient(
-                        colors = listOf(SosCoral, SosRed),
-                        // Світліший центр зміщено вгору-вліво (40% / 35%), насичений червоний — по краю.
-                        center = Offset(diameterPx * 0.40f, diameterPx * 0.35f),
-                        radius = diameterPx * 0.68f
-                    )
-                )
-                // Ледь помітне затемнення під текстом — разом із гало дає контраст ≥ 4,5:1.
-                .background(
-                    Brush.radialGradient(
-                        0f to Color.Black.copy(alpha = 0.18f),
-                        0.6f to Color.Black.copy(alpha = 0.12f),
-                        1f to Color.Transparent
-                    )
-                )
-                .semantics { contentDescription = "Кнопка запиту допомоги. Надсилає сигнал волонтерам" }
-                .clickable(
-                    interactionSource = interactionSource,
-                    indication = ripple(color = Color.White),
-                    role = Role.Button,
-                    onClickLabel = "відкрити запит допомоги",
-                    onClick = onClick
-                )
-        ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier
-                    .padding(horizontal = 12.dp)
-                    .clearAndSetSemantics { }
-            ) {
-                Text(
-                    text = "SOS",
-                    style = TextStyle(
-                        fontFamily = ManropeFontFamily,
-                        fontWeight = FontWeight.ExtraBold,
-                        fontSize = 36.sp,
-                        color = Color.White,
-                        shadow = TextHalo
-                    )
-                )
-                Text(
-                    text = "Потрібна допомога",
-                    textAlign = TextAlign.Center,
-                    style = TextStyle(
-                        fontFamily = ManropeFontFamily,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 13.sp,
-                        color = Color.White,
-                        shadow = TextHalo
-                    )
-                )
             }
-        }
+            .graphicsLayer {
+                scaleX = pressScale
+                scaleY = pressScale
+            }
+            .clip(CircleShape)
+            .background(
+                Brush.radialGradient(
+                    colors = listOf(SosCoral, SosRed),
+                    center = Offset(diameterPx * 0.40f, diameterPx * 0.35f),
+                    radius = diameterPx * 0.68f
+                )
+            )
+            .semantics { contentDescription = SOS_DESCRIPTION }
+            .clickable(
+                interactionSource = interactionSource,
+                indication = ripple(color = Color.White),
+                role = Role.Button,
+                onClickLabel = "відкрити запит допомоги",
+                onClick = onClick
+            )
+    ) {
+        Text(
+            text = "SOS",
+            modifier = Modifier.clearAndSetSemantics { },
+            style = TextStyle(
+                fontFamily = ManropeFontFamily,
+                fontWeight = FontWeight.ExtraBold,
+                fontSize = (diameter.value * 0.3f).sp,
+                color = Color.White,
+                shadow = TextHalo
+            )
+        )
+    }
+}
+
+/**
+ * SOS як окремий пункт нижньої навігації (по центру між вкладками): коло «SOS» і підпис «Допомога»,
+ * як у сусідніх пунктів. Кільця невеликі, щоб уміститися в панелі.
+ */
+@Composable
+fun RowScope.SosNavItem(onClick: () -> Unit) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+        // Без fillMaxHeight: рядок NavigationBar має лише мінімальну висоту (80 dp), і заповнення висоти
+        // розтягнуло б усю панель на весь екран.
+        modifier = Modifier
+            .weight(1f)
+            .align(Alignment.CenterVertically)
+            .padding(vertical = 6.dp)
+    ) {
+        SosCircle(onClick = onClick, diameter = 44.dp, ringMaxScale = 1.45f, glowRadius = 8.dp)
+        Text(
+            text = "Допомога",
+            style = MaterialTheme.typography.labelMedium,
+            color = SosRed,
+            modifier = Modifier
+                .padding(top = 4.dp)
+                .clearAndSetSemantics { }
+        )
+    }
+}
+
+/** Компактна SOS-кнопка для екранів без нижньої панелі (маршрут): коло + «Це не заміна 112». */
+@Composable
+fun SosHelpButton(onClick: () -> Unit, modifier: Modifier = Modifier, diameter: Dp = 64.dp) {
+    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        SosCircle(onClick = onClick, diameter = diameter, ringMaxScale = 1.8f, glowRadius = 14.dp)
         Text(
             text = "Це не заміна 112",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier
-                .padding(top = 10.dp)
+                .padding(top = 8.dp)
                 .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.85f))
                 .padding(horizontal = 8.dp, vertical = 2.dp)

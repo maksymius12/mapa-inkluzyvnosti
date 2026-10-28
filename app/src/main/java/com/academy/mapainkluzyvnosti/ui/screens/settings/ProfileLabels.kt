@@ -10,6 +10,6 @@ fun purposeRoleLabel(role: UserPurposeRole): String = when (role) {
 }
 
 fun ageGroupLabel(group: UserAgeGroup): String = when (group) {
-    UserAgeGroup.STUDENT -> "Учень"
+    UserAgeGroup.STUDENT -> "Підліток"
     UserAgeGroup.ADULT -> "Дорослий"
 }

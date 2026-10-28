@@ -28,6 +28,7 @@ object Routes {
     const val NOTIFICATIONS = "notifications"
     /** Заявки на нові локації: черга на розгляд (рецензент) або власні заявки (мешканець). */
     const val PLACE_REQUESTS = "place_requests"
+    const val ADMIN_USERS = "admin_users"
 
     const val FAVORITES_TAB_PLACES = "places"
     const val FAVORITES_TAB_ROUTES = "routes"
