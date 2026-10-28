@@ -2,6 +2,9 @@ package com.academy.mapainkluzyvnosti.ui.screens.categories
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -46,9 +49,10 @@ fun CategoriesScreen(onCategoryChosen: () -> Unit, viewModel: FiltersViewModel =
         )
 
         CategoryGroup.entries.chunked(2).forEach { rowGroups ->
+            // Однакова висота карток у рядку, навіть коли довга назва переноситься на два рядки.
             Row(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+                modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min).padding(bottom = 12.dp)
             ) {
                 rowGroups.forEach { group ->
                     val visual = group.visual
@@ -59,7 +63,7 @@ fun CategoriesScreen(onCategoryChosen: () -> Unit, viewModel: FiltersViewModel =
                             viewModel.showOnlyCategoryGroup(group)
                             onCategoryChosen()
                         },
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f).fillMaxHeight()
                     ) {
                         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                             IconBadge(color = visual.color, icon = visual.icon, size = 48.dp)

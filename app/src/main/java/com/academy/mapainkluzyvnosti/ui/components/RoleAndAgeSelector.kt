@@ -33,7 +33,8 @@ private fun mapaSegmentedColors(): SegmentedButtonColors = SegmentedButtonDefaul
 )
 
 /**
- * Мета користування (мешканець/волонтер) і вікова категорія (учень/дорослий).
+ * Вікова категорія (підліток/дорослий), потім мета користування (мешканець/волонтер/учень) —
+ * у такому порядку їх питає реєстрація (далі — «Звідки ви про нас дізналися?»).
  * Від них залежать права: наприклад, фото місць додають лише дорослі, бали за перевірки — учням.
  */
 @Composable
@@ -48,7 +49,38 @@ fun RoleAndAgeSelector(
 ) {
     val colors = mapaSegmentedColors()
     Column(modifier = modifier.fillMaxWidth()) {
-        Text(text = "Мета користування", style = MaterialTheme.typography.titleSmall)
+        Text(text = "Вікова категорія", style = MaterialTheme.typography.titleSmall)
+        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+            SegmentedButton(
+                selected = ageGroup == UserAgeGroup.STUDENT,
+                onClick = { onAgeGroupChange(UserAgeGroup.STUDENT) },
+                enabled = enabled,
+                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                colors = colors
+            ) { Text("Підліток") }
+            SegmentedButton(
+                selected = ageGroup == UserAgeGroup.ADULT,
+                onClick = { onAgeGroupChange(UserAgeGroup.ADULT) },
+                enabled = enabled,
+                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                colors = colors
+            ) { Text("Дорослий") }
+        }
+        if (showHints) {
+            Hint(
+                if (ageGroup == UserAgeGroup.STUDENT) {
+                    "Підлітки отримують бали за перевірки; фото місць можуть додавати лише дорослі"
+                } else {
+                    "Дорослі можуть додавати фото місць"
+                }
+            )
+        }
+
+        Text(
+            text = "Мета користування",
+            style = MaterialTheme.typography.titleSmall,
+            modifier = Modifier.padding(top = 20.dp)
+        )
         SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
             SegmentedButton(
                 selected = purposeRole == UserPurposeRole.RESIDENT,
@@ -79,37 +111,6 @@ fun RoleAndAgeSelector(
                         "Волонтери й учні бачать запити про допомогу та заявки на нові місця поруч і можуть їх розглядати"
                     UserPurposeRole.RESIDENT ->
                         "Шукайте доступні місця, будуйте зручні маршрути; нову локацію подаєте як заявку на розгляд"
-                }
-            )
-        }
-
-        Text(
-            text = "Вікова категорія",
-            style = MaterialTheme.typography.titleSmall,
-            modifier = Modifier.padding(top = 20.dp)
-        )
-        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
-            SegmentedButton(
-                selected = ageGroup == UserAgeGroup.STUDENT,
-                onClick = { onAgeGroupChange(UserAgeGroup.STUDENT) },
-                enabled = enabled,
-                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
-                colors = colors
-            ) { Text("Учень") }
-            SegmentedButton(
-                selected = ageGroup == UserAgeGroup.ADULT,
-                onClick = { onAgeGroupChange(UserAgeGroup.ADULT) },
-                enabled = enabled,
-                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
-                colors = colors
-            ) { Text("Дорослий") }
-        }
-        if (showHints) {
-            Hint(
-                if (ageGroup == UserAgeGroup.STUDENT) {
-                    "Учні отримують бали за перевірки; фото місць можуть додавати лише дорослі"
-                } else {
-                    "Дорослі можуть додавати фото місць"
                 }
             )
         }

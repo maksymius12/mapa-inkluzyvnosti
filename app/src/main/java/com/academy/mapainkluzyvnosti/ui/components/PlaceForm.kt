@@ -39,12 +39,14 @@ val PlaceCategory.formLabel: String
         PlaceCategory.EDUCATION -> "Освіта"
         PlaceCategory.HEALTH -> "Медицина"
         PlaceCategory.CULTURE -> "Культура"
+        PlaceCategory.LIBRARY -> "Бібліотека"
         PlaceCategory.SPORT -> "Спорт"
         PlaceCategory.CAFE -> "Кафе та ресторани"
-        PlaceCategory.SERVICES -> "Сервіси"
-        PlaceCategory.ADMIN -> "Адмінустанови"
+        PlaceCategory.SERVICES -> "Сервіси (пошта, банк, побут)"
+        PlaceCategory.CNAP -> "ЦНАП (адмінпослуги)"
+        PlaceCategory.ADMIN -> "Держустанова / соцслужба"
         PlaceCategory.SHOP -> "Магазини"
-        PlaceCategory.TRANSIT -> "Транспорт"
+        PlaceCategory.TRANSIT -> "Зупинка громадського транспорту"
     }
 
 @OptIn(ExperimentalLayoutApi::class)

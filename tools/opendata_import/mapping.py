@@ -35,7 +35,18 @@ OTHER_RULES = [
 ]
 
 
+# Категорії застосунку, яких набір окремо не виділяє (бібліотеки сидять у «Культурі», ЦНАП — у «Соцпослугах»
+# чи «Іншому»): визначаються за назвою й мають пріоритет над kind.
+TITLE_RULES = [
+    (re.compile(r'бібліотек|\bЦБС\b|\bЦРБ\b', re.I), 'library'),
+    (re.compile(r'надання адміністративних послуг|\bЦНАП\b', re.I), 'cnap'),
+]
+
+
 def map_category(kind, title):
+    for rx, category in TITLE_RULES:
+        if rx.search(title or ''):
+            return category
     if kind in KIND_TO_CATEGORY:
         return KIND_TO_CATEGORY[kind]
     for rx, category in OTHER_RULES:

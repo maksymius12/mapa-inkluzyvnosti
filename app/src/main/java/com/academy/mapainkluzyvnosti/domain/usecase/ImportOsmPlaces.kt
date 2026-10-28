@@ -20,6 +20,7 @@ private val OSM_TAG_CATEGORIES: List<Triple<String, String, PlaceCategory>> = li
     Triple("amenity", "clinic", PlaceCategory.HEALTH),
     Triple("amenity", "doctors", PlaceCategory.HEALTH),
     Triple("amenity", "pharmacy", PlaceCategory.HEALTH),
+    Triple("amenity", "library", PlaceCategory.LIBRARY),
     Triple("amenity", "townhall", PlaceCategory.ADMIN),
     Triple("office", "government", PlaceCategory.ADMIN),
     Triple("shop", "supermarket", PlaceCategory.SHOP),

@@ -1,5 +1,7 @@
 package com.academy.mapainkluzyvnosti.data.repository
 
+import android.util.Log
+import com.academy.mapainkluzyvnosti.BuildConfig
 import com.academy.mapainkluzyvnosti.data.model.AppUser
 import com.academy.mapainkluzyvnosti.data.model.ReferralSource
 import com.academy.mapainkluzyvnosti.data.model.UserAgeGroup
@@ -143,6 +145,16 @@ class AuthRepository(private val client: SupabaseClient) {
                 put(META_AGE_GROUP, ageGroup.apiValue)
                 referralSource?.let { put(META_REFERRAL_SOURCE, it.apiValue) }
             }
+        }
+        if (BuildConfig.DEBUG) {
+            // Перевірка реєстрації без доступу до бази: що пішло в метадані й що сервер зберіг у user_metadata
+            // (з них тригер handle_new_user_profile створює рядок profiles). Без пошти й імені.
+            Log.d(
+                "SignUp",
+                "sent purpose_role=${purposeRole.apiValue} age_group=${ageGroup.apiValue} " +
+                    "referral_source=${referralSource?.apiValue}; server user_metadata=" +
+                    user?.userMetadata?.filterKeys { it in setOf(META_PURPOSE_ROLE, META_AGE_GROUP, META_REFERRAL_SOURCE) }
+            )
         }
         val session = client.auth.currentSessionOrNull()
         return when {

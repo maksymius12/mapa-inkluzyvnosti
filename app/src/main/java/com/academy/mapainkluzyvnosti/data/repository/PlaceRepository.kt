@@ -131,6 +131,10 @@ class PlaceRepository(private val client: SupabaseClient) {
         return client.postgrest.from("place_photos").insert(photo) { select() }.decodeSingle()
     }
 
+    /**
+     * AI-аналіз фото через Edge Function analyze-place-photo (Gemini на сервері; ключа в застосунку немає).
+     * Не обов'язковий: якщо функція недоступна, фото зберігається без підказок.
+     */
     private suspend fun analyzePhoto(photoUrl: String): AnalyzePlacePhotoResponse? {
         return try {
             client.functions.invoke(
@@ -138,6 +142,7 @@ class PlaceRepository(private val client: SupabaseClient) {
                 body = AnalyzePlacePhotoRequest(photoUrl)
             ).body<AnalyzePlacePhotoResponse>()
         } catch (e: Exception) {
+            SupabaseErrorLog.log("POST /functions/v1/analyze-place-photo", e)
             null
         }
     }

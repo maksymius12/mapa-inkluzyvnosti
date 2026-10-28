@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.AdminPanelSettings
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.HelpOutline
 import androidx.compose.material.icons.outlined.Info
@@ -70,6 +71,7 @@ fun ProfileScreen(
     onOpenHelp: () -> Unit,
     onOpenTutorial: () -> Unit,
     onOpenPlaceRequests: () -> Unit,
+    onOpenAdmin: () -> Unit,
     onSignedOut: () -> Unit,
     viewModel: ProfileViewModel = koinViewModel()
 ) {
@@ -146,6 +148,9 @@ fun ProfileScreen(
                     if (user?.isReviewer == true) "Заявки на розгляд" else "Мої заявки",
                     onOpenPlaceRequests
                 )
+            }
+            if (!isDemoMode && user?.isAdmin == true) {
+                MenuRow(Icons.Outlined.AdminPanelSettings, "Адмін-панель", onOpenAdmin)
             }
             MenuRow(Icons.Outlined.Settings, "Налаштування", onOpenSettings)
             MenuRow(Icons.Outlined.HelpOutline, "Допомога", { showHelp = true })

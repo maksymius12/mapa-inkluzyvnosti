@@ -10,6 +10,7 @@ import com.academy.mapainkluzyvnosti.data.repository.AuthRepository
 import com.academy.mapainkluzyvnosti.data.repository.CheckRepository
 import com.academy.mapainkluzyvnosti.data.repository.FavoriteRepository
 import com.academy.mapainkluzyvnosti.data.repository.PlaceRepository
+import com.academy.mapainkluzyvnosti.data.repository.AdminRepository
 import com.academy.mapainkluzyvnosti.data.repository.PlaceRequestRepository
 import com.academy.mapainkluzyvnosti.data.repository.SosRepository
 import com.academy.mapainkluzyvnosti.data.repository.UserPlaceRepository
@@ -25,6 +26,7 @@ import com.academy.mapainkluzyvnosti.ui.screens.login.SignUpViewModel
 import com.academy.mapainkluzyvnosti.ui.screens.map.AddPlaceViewModel
 import com.academy.mapainkluzyvnosti.ui.screens.map.MapViewModel
 import com.academy.mapainkluzyvnosti.ui.screens.photoupload.PhotoUploadViewModel
+import com.academy.mapainkluzyvnosti.ui.screens.admin.AdminUsersViewModel
 import com.academy.mapainkluzyvnosti.ui.screens.requests.PlaceRequestsViewModel
 import com.academy.mapainkluzyvnosti.ui.screens.placedetail.PlaceDetailViewModel
 import com.academy.mapainkluzyvnosti.ui.screens.notifications.NotificationsViewModel
@@ -64,6 +66,7 @@ val repositoryModule = module {
     single { SosRepository(get()) }
     single { UserPlaceRepository(get(), get()) }
     single { PlaceRequestRepository(get()) }
+    single { AdminRepository(get()) }
 }
 
 val useCaseModule = module {
@@ -94,6 +97,7 @@ val viewModelModule = module {
     viewModel { MapViewModel(get(), get(), get(), get(), get()) }
     viewModel { AddPlaceViewModel(get(), get(), get(), get(), get()) }
     viewModel { PlaceRequestsViewModel(get(), get()) }
+    viewModel { AdminUsersViewModel(get(), get()) }
     viewModel { SearchViewModel(get()) }
     viewModel { FiltersViewModel(get()) }
     viewModel { (placeId: String) -> PlaceDetailViewModel(placeId, get(), get(), get(), get(), get()) }

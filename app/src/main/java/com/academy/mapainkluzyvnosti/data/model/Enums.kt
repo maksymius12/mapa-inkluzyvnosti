@@ -8,12 +8,35 @@ enum class PlaceCategory {
     @SerialName("education") EDUCATION,
     @SerialName("health") HEALTH,
     @SerialName("culture") CULTURE,
+    /** Бібліотеки — у відкритих даних їх найбільше серед закладів культури, тож окремо. */
+    @SerialName("library") LIBRARY,
     @SerialName("sport") SPORT,
     @SerialName("cafe") CAFE,
     @SerialName("services") SERVICES,
+    /** ЦНАП — центр надання адміністративних послуг (окремо від інших держустанов). */
+    @SerialName("cnap") CNAP,
+    /** Органи влади, управління й соцслужби. */
     @SerialName("admin") ADMIN,
     @SerialName("shop") SHOP,
+    /** Зупинки громадського транспорту: автобус/тролейбус/трамвай, станції метро й залізниці. */
     @SerialName("transit") TRANSIT
+}
+
+/**
+ * Категорії, що існували до появи [PlaceCategory.LIBRARY] і [PlaceCategory.CNAP]. Збережені набори
+ * фільтрів без позначки «відомих» категорій — старі, тож нові категорії в них додаються увімкненими.
+ */
+val LEGACY_PLACE_CATEGORY_NAMES: Set<String> =
+    setOf("EDUCATION", "HEALTH", "CULTURE", "SPORT", "CAFE", "SERVICES", "ADMIN", "SHOP", "TRANSIT")
+
+/**
+ * Відновлює збережений набір категорій: невідомі назви відкидає, а категорії, яких ще не було на момент
+ * збереження ([knownNames]), додає — нова категорія не має зникати з мапи лише через старий фільтр.
+ */
+fun decodeStoredCategories(names: Set<String>, knownNames: Set<String>?): Set<PlaceCategory> {
+    val known = knownNames ?: LEGACY_PLACE_CATEGORY_NAMES
+    val saved = names.mapNotNull { name -> PlaceCategory.entries.firstOrNull { it.name == name } }
+    return (saved + PlaceCategory.entries.filter { it.name !in known }).toSet()
 }
 
 @Serializable
