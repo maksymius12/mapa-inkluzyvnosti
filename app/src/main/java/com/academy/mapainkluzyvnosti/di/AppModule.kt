@@ -46,8 +46,15 @@ import com.academy.mapainkluzyvnosti.ui.state.ThemeStore
 import com.academy.mapainkluzyvnosti.ui.state.SessionSync
 import com.academy.mapainkluzyvnosti.ui.state.TutorialCoordinator
 import com.academy.mapainkluzyvnosti.data.local.TutorialPreferences
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import org.koin.core.module.dsl.viewModel
+import org.koin.core.qualifier.named
 import org.koin.dsl.module
+
+/** Koin-ім'я CoroutineScope застосунку. */
+private const val APP_SCOPE = "appScope"
 
 val networkModule = module {
     single { createMapaSupabaseClient() }
@@ -78,6 +85,8 @@ val stateModule = module {
     single { SettingsStore(get()) }
     single { MapFilterStore(get(), get()) }
     single { CurrentUserStore() }
+    // Живе весь час роботи застосунку — для фонової роботи, що не має обриватися разом з екраном.
+    single(named(APP_SCOPE)) { CoroutineScope(SupervisorJob() + Dispatchers.Main) }
     single { DemoModeStore(get()) }
     single { AppStartup(get(), get(), get(), get()) }
     single { FavoriteRoutesStore(get()) }
@@ -108,7 +117,7 @@ val viewModelModule = module {
     viewModel { ProfileViewModel(get(), get(), get()) }
     viewModel { SettingsViewModel(get(), get(), get(), get(), get()) }
     viewModel { NotificationsViewModel(get()) }
-    viewModel { SosRequestViewModel(get(), get(), get()) }
+    viewModel { SosRequestViewModel(get(), get(), get(), get(), get(named(APP_SCOPE))) }
 }
 
 val appModules = listOf(networkModule, repositoryModule, useCaseModule, stateModule, viewModelModule)

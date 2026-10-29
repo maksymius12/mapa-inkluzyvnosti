@@ -11,10 +11,18 @@ import java.time.Instant
 
 class SosRepository(private val client: SupabaseClient) {
 
-    suspend fun createRequest(userId: String, lat: Double, lng: Double, problemType: SosProblemType, comment: String?) {
+    /** Створює SOS-запит і повертає його id (щоб потім уточнити координати). */
+    suspend fun createRequest(userId: String, lat: Double, lng: Double, problemType: SosProblemType, comment: String?): String =
         client.postgrest.from("sos_requests").insert(
             SosRequestInsertDto(userId = userId, lat = lat, lng = lng, problemType = problemType, comment = comment)
-        )
+        ) { select() }.decodeSingle<SosRequestDto>().id
+
+    /** Точніші координати вже надісланого запиту — коли свіжий GPS-фікс з'явився після відправки. */
+    suspend fun updateLocation(id: String, lat: Double, lng: Double) {
+        client.postgrest.from("sos_requests").update({
+            set("lat", lat)
+            set("lng", lng)
+        }) { filter { eq("id", id) } }
     }
 
     suspend fun getOpenRequests(): List<SosRequest> =

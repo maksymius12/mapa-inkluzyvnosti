@@ -70,7 +70,10 @@ private fun AuthRestException.authMessage(fallback: String): String = when (erro
     AuthErrorCode.WeakPassword -> "Пароль надто простий. Зробіть його довшим і додайте літери та цифри"
     AuthErrorCode.SamePassword -> "Новий пароль має відрізнятися від попереднього"
     AuthErrorCode.EmailNotConfirmed -> "Пошту ще не підтверджено. Введіть код із листа"
-    AuthErrorCode.EmailAddressInvalid, AuthErrorCode.EmailAddressNotAuthorized -> "Перевірте правильність email"
+    AuthErrorCode.EmailAddressInvalid -> "Перевірте правильність email"
+    // Вбудована пошта Supabase (без власного SMTP) надсилає лише на адреси учасників проєкту —
+    // адреса правильна, але лист на неї піти не може.
+    AuthErrorCode.EmailAddressNotAuthorized -> "Не вдалося надіслати лист на цю адресу. Спробуйте іншу пошту або пізніше"
     AuthErrorCode.UserNotFound -> "Акаунта з таким email не знайдено"
     AuthErrorCode.UserBanned -> "Цей акаунт заблоковано"
     AuthErrorCode.SignupDisabled, AuthErrorCode.EmailProviderDisabled -> "Реєстрацію тимчасово вимкнено. Спробуйте пізніше"

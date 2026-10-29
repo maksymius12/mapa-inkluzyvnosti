@@ -8,6 +8,7 @@ import com.academy.mapainkluzyvnosti.data.remote.toUserMessage
 import com.academy.mapainkluzyvnosti.data.repository.AdminRepository
 import com.academy.mapainkluzyvnosti.data.repository.AdminUser
 import com.academy.mapainkluzyvnosti.ui.state.CurrentUserStore
+import io.github.jan.supabase.postgrest.exception.PostgrestRestException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -64,7 +65,7 @@ class AdminUsersViewModel(
                 .onSuccess { list -> _uiState.update { it.copy(isLoading = false, users = list) } }
                 .onFailure { e ->
                     _uiState.update {
-                        it.copy(isLoading = false, errorMessage = e.toUserMessage("Не вдалося завантажити користувачів"))
+                        it.copy(isLoading = false, errorMessage = e.toAdminMessage("Не вдалося завантажити користувачів"))
                     }
                 }
         }
@@ -91,9 +92,20 @@ class AdminUsersViewModel(
                     _uiState.update { it.copy(isActing = false, message = success) }
                     load()
                 }
-                .onFailure { e -> _uiState.update { it.copy(isActing = false, errorMessage = e.toUserMessage(failure)) } }
+                .onFailure { e -> _uiState.update { it.copy(isActing = false, errorMessage = e.toAdminMessage(failure)) } }
         }
     }
+
+    /**
+     * PGRST202 — RPC admin_* ще немає в базі (міграцію 20261027160000 не застосовано). Екран бачать лише
+     * адміністратори, тож прямо кажемо, що робити, замість загального «не вдалося».
+     */
+    private fun Throwable.toAdminMessage(fallback: String): String =
+        if ((this as? PostgrestRestException)?.code == "PGRST202") {
+            "Адмін-панель ще не налаштована на сервері: застосуйте міграцію 20261027160000_admin_users_panel.sql"
+        } else {
+            toUserMessage(fallback)
+        }
 
     fun consumeMessage() = _uiState.update { it.copy(message = null, errorMessage = null) }
 }

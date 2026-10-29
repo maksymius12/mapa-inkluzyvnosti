@@ -28,21 +28,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
-import com.academy.mapainkluzyvnosti.data.local.DeviceLocation
-import com.academy.mapainkluzyvnosti.data.model.GeoPoint
 import com.academy.mapainkluzyvnosti.data.model.SosProblemType
 import com.academy.mapainkluzyvnosti.ui.components.DemoGateDialog
 import com.academy.mapainkluzyvnosti.ui.components.label
-import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -54,31 +47,16 @@ fun SosRequestScreen(onDone: () -> Unit, onRequestLogin: () -> Unit, viewModel: 
         DemoGateDialog(onDismiss = viewModel::dismissDemoGate, onSignInWithGoogle = onRequestLogin)
     }
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
 
-    var location by remember { mutableStateOf<GeoPoint?>(null) }
-    var locationDenied by remember { mutableStateOf(false) }
-
+    // Позицію визначає ViewModel: одразу остання відома, точний фікс — у фоні (див. SosRequestViewModel).
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) {
-            scope.launch {
-                location = DeviceLocation.getCurrent(context)
-                locationDenied = location == null
-            }
-        } else {
-            locationDenied = true
-        }
+        if (granted) viewModel.startLocating() else viewModel.onLocationPermissionDenied()
     }
 
     LaunchedEffect(Unit) {
         val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
             PackageManager.PERMISSION_GRANTED
-        if (granted) {
-            location = DeviceLocation.getCurrent(context)
-            locationDenied = location == null
-        } else {
-            permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
-        }
+        if (granted) viewModel.startLocating() else permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
     }
 
     LaunchedEffect(uiState.isSubmitted) {
@@ -100,11 +78,11 @@ fun SosRequestScreen(onDone: () -> Unit, onRequestLogin: () -> Unit, viewModel: 
         SosRequestForm(
             innerPadding = innerPadding,
             uiState = uiState,
-            hasLocation = location != null,
-            locationDenied = locationDenied,
+            hasLocation = uiState.location != null,
+            locationDenied = uiState.locationUnavailable && uiState.location == null,
             onProblemTypeChange = viewModel::onProblemTypeChange,
             onCommentChange = viewModel::onCommentChange,
-            onSubmit = { location?.let { viewModel.submit(it.lat, it.lng) } }
+            onSubmit = viewModel::submit
         )
     }
 }

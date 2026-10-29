@@ -22,19 +22,33 @@ object DeviceLocation {
         ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
             ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
 
+    /** Свіжий фікс (до [FIX_TIMEOUT_MS]), а якщо не вдався — остання відома позиція. */
     suspend fun getCurrent(context: Context): GeoPoint? {
         if (!hasPermission(context)) return null
-        val manager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
-
-        requestSingleFix(manager)?.let { return GeoPoint(it.latitude, it.longitude) }
-
-        val lastKnown = listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER, LocationManager.PASSIVE_PROVIDER)
-            .mapNotNull { provider -> runCatching { manager.getLastKnownLocation(provider) }.getOrNull() }
-            .maxByOrNull { it.time }
-        return lastKnown?.let { GeoPoint(it.latitude, it.longitude) }
+        return freshFix(context) ?: lastKnown(context)
     }
 
-    private suspend fun requestSingleFix(manager: LocationManager): Location? = suspendCancellableCoroutine { cont ->
+    /**
+     * Остання відома позиція з будь-якого провайдера (найсвіжіша) — миттєво, без увімкнення GPS.
+     * null, якщо пристрій ще жодного разу не визначав місце (перший запуск, щойно дали дозвіл).
+     */
+    fun lastKnown(context: Context): GeoPoint? {
+        if (!hasPermission(context)) return null
+        val manager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+        return listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER, LocationManager.PASSIVE_PROVIDER)
+            .mapNotNull { provider -> runCatching { manager.getLastKnownLocation(provider) }.getOrNull() }
+            .maxByOrNull { it.time }
+            ?.let { GeoPoint(it.latitude, it.longitude) }
+    }
+
+    /** Новий фікс від GPS (або мережі, якщо GPS вимкнено); null, якщо не встиг за [timeoutMs]. */
+    suspend fun freshFix(context: Context, timeoutMs: Long = FIX_TIMEOUT_MS): GeoPoint? {
+        if (!hasPermission(context)) return null
+        val manager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+        return requestSingleFix(manager, timeoutMs)?.let { GeoPoint(it.latitude, it.longitude) }
+    }
+
+    private suspend fun requestSingleFix(manager: LocationManager, timeoutMs: Long): Location? = suspendCancellableCoroutine { cont ->
         val provider = when {
             manager.isProviderEnabled(LocationManager.GPS_PROVIDER) -> LocationManager.GPS_PROVIDER
             manager.isProviderEnabled(LocationManager.NETWORK_PROVIDER) -> LocationManager.NETWORK_PROVIDER
@@ -64,7 +78,7 @@ object DeviceLocation {
             manager.removeUpdates(listener)
             if (cont.isActive) cont.resume(null)
         }
-        timeoutHandler.postDelayed(timeoutRunnable, FIX_TIMEOUT_MS)
+        timeoutHandler.postDelayed(timeoutRunnable, timeoutMs)
 
         cont.invokeOnCancellation {
             manager.removeUpdates(listener)
