@@ -1,17 +1,9 @@
 package com.academy.mapainkluzyvnosti.ui.screens.photoupload
 
-import android.Manifest
-import android.content.pm.PackageManager
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -21,16 +13,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -45,18 +34,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
 import com.academy.mapainkluzyvnosti.ui.components.DemoGateDialog
+import com.academy.mapainkluzyvnosti.ui.components.PhotoSourceButtons
 import com.academy.mapainkluzyvnosti.ui.components.color
 import com.academy.mapainkluzyvnosti.ui.components.label
-import kotlinx.coroutines.Dispatchers
+import com.academy.mapainkluzyvnosti.ui.components.rememberPhotoPicker
+import com.academy.mapainkluzyvnosti.ui.components.toJpegBytes
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
-import java.io.ByteArrayOutputStream
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -67,7 +54,6 @@ fun PhotoUploadScreen(
     viewModel: PhotoUploadViewModel = koinViewModel(parameters = { parametersOf(placeId) })
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var previewBitmap by remember { mutableStateOf<Bitmap?>(null) }
 
@@ -75,36 +61,9 @@ fun PhotoUploadScreen(
         DemoGateDialog(onDismiss = viewModel::dismissDemoGate, onSignInWithGoogle = onRequestLogin)
     }
 
-    fun submitBitmap(bitmap: Bitmap) {
+    val photoPicker = rememberPhotoPicker { bitmap ->
         previewBitmap = bitmap
-        scope.launch {
-            val bytes = withContext(Dispatchers.Default) {
-                ByteArrayOutputStream().use { stream ->
-                    bitmap.compress(Bitmap.CompressFormat.JPEG, 85, stream)
-                    stream.toByteArray()
-                }
-            }
-            viewModel.uploadPhoto(bytes, "jpg")
-        }
-    }
-
-    val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        if (uri != null) {
-            scope.launch {
-                val bitmap = withContext(Dispatchers.IO) {
-                    context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) }
-                }
-                bitmap?.let { submitBitmap(it) }
-            }
-        }
-    }
-
-    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()) { bitmap ->
-        bitmap?.let { submitBitmap(it) }
-    }
-
-    val cameraPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) cameraLauncher.launch(null)
+        scope.launch { viewModel.uploadPhoto(bitmap.toJpegBytes(), "jpg") }
     }
 
     Scaffold(
@@ -144,27 +103,11 @@ fun PhotoUploadScreen(
             }
 
             if (uiState.result == null) {
-                Row(modifier = Modifier.padding(top = 16.dp)) {
-                    OutlinedButton(
-                        onClick = { galleryLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Icon(Icons.Filled.PhotoLibrary, contentDescription = null)
-                        Text(" Галерея", modifier = Modifier.padding(start = 4.dp))
-                    }
-                    Spacer(Modifier.padding(4.dp))
-                    OutlinedButton(
-                        onClick = {
-                            val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
-                                PackageManager.PERMISSION_GRANTED
-                            if (granted) cameraLauncher.launch(null) else cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
-                        },
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Icon(Icons.Filled.CameraAlt, contentDescription = null)
-                        Text(" Камера", modifier = Modifier.padding(start = 4.dp))
-                    }
-                }
+                PhotoSourceButtons(
+                    onGallery = photoPicker::pickFromGallery,
+                    onCamera = photoPicker::takePhoto,
+                    modifier = Modifier.padding(top = 16.dp)
+                )
             }
 
             if (uiState.isUploading) {

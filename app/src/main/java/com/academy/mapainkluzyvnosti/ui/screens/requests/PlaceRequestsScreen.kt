@@ -1,21 +1,26 @@
 package com.academy.mapainkluzyvnosti.ui.screens.requests
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AddAPhoto
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -28,15 +33,21 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import com.academy.mapainkluzyvnosti.data.model.PlaceRequest
 import com.academy.mapainkluzyvnosti.data.model.PlaceRequestStatus
 import com.academy.mapainkluzyvnosti.ui.components.IconBadge
 import com.academy.mapainkluzyvnosti.ui.components.MapaCard
+import com.academy.mapainkluzyvnosti.ui.components.PhotoSourceButtons
 import com.academy.mapainkluzyvnosti.ui.components.formLabel
+import com.academy.mapainkluzyvnosti.ui.components.rememberPhotoPicker
 import com.academy.mapainkluzyvnosti.ui.components.visual
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
@@ -51,6 +62,10 @@ fun PlaceRequestsScreen(onBack: () -> Unit, viewModel: PlaceRequestsViewModel = 
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     var rejectTarget by remember { mutableStateOf<PlaceRequest?>(null) }
+    var proofSourceFor by remember { mutableStateOf<PlaceRequest?>(null) }
+    // Для якої заявки відкрито галерею/камеру — переживає перехід в інший застосунок.
+    var proofTargetId by rememberSaveable { mutableStateOf<String?>(null) }
+    val photoPicker = rememberPhotoPicker { photo -> proofTargetId?.let { viewModel.setProof(it, photo) } }
 
     LaunchedEffect(uiState.message) {
         uiState.message?.let {
@@ -92,6 +107,9 @@ fun PlaceRequestsScreen(onBack: () -> Unit, viewModel: PlaceRequestsViewModel = 
                         request = request,
                         isReviewer = uiState.isReviewer,
                         isActing = uiState.isActing,
+                        proof = uiState.proofs[request.id],
+                        onAddProof = { proofSourceFor = request },
+                        onRemoveProof = { viewModel.removeProof(request.id) },
                         onApprove = { viewModel.approve(request.id) },
                         onReject = { rejectTarget = request },
                         modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
@@ -101,6 +119,33 @@ fun PlaceRequestsScreen(onBack: () -> Unit, viewModel: PlaceRequestsViewModel = 
         }
 
         SnackbarHost(hostState = snackbarHostState)
+    }
+
+    proofSourceFor?.let { request ->
+        AlertDialog(
+            onDismissRequest = { proofSourceFor = null },
+            title = { Text("Фото-доказ") },
+            text = {
+                Column {
+                    Text("Сфотографуйте «${request.name}», щоб підтвердити, що місце існує й відповідає заявці.")
+                    PhotoSourceButtons(
+                        onGallery = {
+                            proofTargetId = request.id
+                            proofSourceFor = null
+                            photoPicker.pickFromGallery()
+                        },
+                        onCamera = {
+                            proofTargetId = request.id
+                            proofSourceFor = null
+                            photoPicker.takePhoto()
+                        },
+                        modifier = Modifier.fillMaxWidth().padding(top = 16.dp)
+                    )
+                }
+            },
+            confirmButton = {},
+            dismissButton = { TextButton(onClick = { proofSourceFor = null }) { Text("Скасувати") } }
+        )
     }
 
     rejectTarget?.let { request ->
@@ -137,6 +182,9 @@ private fun RequestCard(
     request: PlaceRequest,
     isReviewer: Boolean,
     isActing: Boolean,
+    proof: ReviewProof?,
+    onAddProof: () -> Unit,
+    onRemoveProof: () -> Unit,
     onApprove: () -> Unit,
     onReject: () -> Unit,
     modifier: Modifier = Modifier
@@ -156,12 +204,65 @@ private fun RequestCard(
             }
         }
         if (isReviewer && request.status == PlaceRequestStatus.PENDING) {
+            ReviewProofSection(
+                proof = proof,
+                enabled = !isActing,
+                onAddProof = onAddProof,
+                onRemoveProof = onRemoveProof,
+                modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 8.dp)
+            )
             Row(
                 modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
                 horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp)
             ) {
                 TextButton(onClick = onReject, enabled = !isActing) { Text("Відхилити", color = MaterialTheme.colorScheme.error) }
-                TextButton(onClick = onApprove, enabled = !isActing) { Text("Схвалити") }
+                // Без фото-доказу схвалити не можна (сервер теж перевіряє); відхилити — можна.
+                TextButton(onClick = onApprove, enabled = !isActing && proof != null) { Text("Схвалити") }
+            }
+        }
+    }
+}
+
+/** Фото-доказ рецензента: кнопка «Додати фото-доказ» або прев'ю з підписом перед схваленням. */
+@Composable
+private fun ReviewProofSection(
+    proof: ReviewProof?,
+    enabled: Boolean,
+    onAddProof: () -> Unit,
+    onRemoveProof: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier) {
+        if (proof == null) {
+            OutlinedButton(onClick = onAddProof, enabled = enabled, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Filled.AddAPhoto, contentDescription = null)
+                Text(" Додати фото-доказ", modifier = Modifier.padding(start = 4.dp))
+            }
+            Text(
+                text = "Щоб схвалити, додайте власне фото місця як підтвердження",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp)
+            )
+        } else {
+            Text(
+                text = "Фото-доказ рецензента (ваше)",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Image(
+                bitmap = proof.preview.asImageBitmap(),
+                contentDescription = "Фото-доказ рецензента",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(180.dp)
+                    .padding(top = 6.dp)
+                    .clip(RoundedCornerShape(12.dp))
+            )
+            Row {
+                TextButton(onClick = onAddProof, enabled = enabled) { Text("Замінити") }
+                TextButton(onClick = onRemoveProof, enabled = enabled) { Text("Прибрати") }
             }
         }
     }

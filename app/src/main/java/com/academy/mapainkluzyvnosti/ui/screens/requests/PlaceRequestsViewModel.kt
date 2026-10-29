@@ -1,10 +1,12 @@
 package com.academy.mapainkluzyvnosti.ui.screens.requests
 
+import android.graphics.Bitmap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.academy.mapainkluzyvnosti.data.model.PlaceRequest
 import com.academy.mapainkluzyvnosti.data.remote.toUserMessage
 import com.academy.mapainkluzyvnosti.data.repository.PlaceRequestRepository
+import com.academy.mapainkluzyvnosti.ui.components.toJpegBytes
 import com.academy.mapainkluzyvnosti.ui.state.CurrentUserStore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -18,9 +20,17 @@ data class PlaceRequestsUiState(
     val requests: List<PlaceRequest> = emptyList(),
     val isLoading: Boolean = true,
     val isActing: Boolean = false,
+    /** Фото-докази рецензента за id заявки — без нього «Схвалити» неактивна. */
+    val proofs: Map<String, ReviewProof> = emptyMap(),
     val errorMessage: String? = null,
     val message: String? = null
 )
+
+/**
+ * Фото-доказ рецензента: прев'ю, JPEG для завантаження і шлях у review-photos після завантаження
+ * (щоб повторне «Схвалити» після помилки RPC не вантажило файл удруге).
+ */
+class ReviewProof(val preview: Bitmap, val jpeg: ByteArray, val uploadedPath: String? = null)
 
 /** Список заявок на нові локації: черга на розгляд (рецензент) або власні заявки (мешканець). */
 class PlaceRequestsViewModel(
@@ -49,13 +59,35 @@ class PlaceRequestsViewModel(
         }
     }
 
+    fun setProof(requestId: String, photo: Bitmap) {
+        viewModelScope.launch {
+            val jpeg = photo.toJpegBytes()
+            _uiState.update { it.copy(proofs = it.proofs + (requestId to ReviewProof(photo, jpeg))) }
+        }
+    }
+
+    fun removeProof(requestId: String) = _uiState.update { it.copy(proofs = it.proofs - requestId) }
+
     fun approve(requestId: String) {
         if (_uiState.value.isActing) return
+        val proof = _uiState.value.proofs[requestId] ?: run {
+            _uiState.update { it.copy(errorMessage = "Додайте фото-доказ, щоб схвалити заявку") }
+            return
+        }
         viewModelScope.launch {
             _uiState.update { it.copy(isActing = true, errorMessage = null) }
-            runCatching { repository.approve(requestId) }
+            runCatching {
+                val path = proof.uploadedPath ?: repository.uploadReviewPhoto(requestId, proof.jpeg, "jpg").also { path ->
+                    _uiState.update { state ->
+                        state.copy(proofs = state.proofs + (requestId to ReviewProof(proof.preview, proof.jpeg, path)))
+                    }
+                }
+                repository.approve(requestId, path)
+            }
                 .onSuccess {
-                    _uiState.update { it.copy(isActing = false, message = "Заявку схвалено — місце на мапі") }
+                    _uiState.update {
+                        it.copy(isActing = false, proofs = it.proofs - requestId, message = "Заявку схвалено — місце на мапі")
+                    }
                     load()
                 }
                 .onFailure { e ->
