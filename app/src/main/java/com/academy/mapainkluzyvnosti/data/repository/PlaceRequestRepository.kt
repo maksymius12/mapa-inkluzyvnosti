@@ -8,17 +8,21 @@ import com.academy.mapainkluzyvnosti.data.remote.dto.PlaceRequestDto
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Order
+import io.github.jan.supabase.storage.storage
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import java.util.UUID
 
 /**
  * Заявки мешканців на нові локації: подача (мешканець), черга на розгляд і рішення
  * (волонтер/учень/адмін — RLS і RPC на сервері перевіряють права самі).
  */
 private val rowJson = Json { ignoreUnknownKeys = true }
+
+private const val REVIEW_PHOTOS_BUCKET = "review-photos"
 
 class PlaceRequestRepository(private val client: SupabaseClient) {
 
@@ -66,11 +70,34 @@ class PlaceRequestRepository(private val client: SupabaseClient) {
             .decodeList<PlaceRequestDto>()
             .map { it.toDomain() }
 
-    suspend fun approve(requestId: String) {
+    /**
+     * Фото-доказ рецензента — у приватний bucket review-photos, у теку заявки (так вимагає storage-політика
+     * і approve_place_request). Повертає шлях у bucket'і.
+     */
+    suspend fun uploadReviewPhoto(requestId: String, bytes: ByteArray, fileExtension: String): String {
+        val path = "$requestId/${UUID.randomUUID()}.$fileExtension"
         try {
-            client.postgrest.rpc("approve_place_request", buildJsonObject { put("p_request_id", requestId) })
+            client.storage.from(REVIEW_PHOTOS_BUCKET).upload(path, bytes)
         } catch (e: Exception) {
-            SupabaseErrorLog.log("POST /rest/v1/rpc/approve_place_request", e, mapOf("p_request_id" to requestId))
+            SupabaseErrorLog.log("POST /storage/v1/object/$REVIEW_PHOTOS_BUCKET", e, mapOf("path" to path))
+            throw e
+        }
+        return path
+    }
+
+    /** Схвалити можна лише з фото-доказом: сервер перевіряє, що файл [photoPath] справді завантажено. */
+    suspend fun approve(requestId: String, photoPath: String) {
+        val params = mapOf("p_request_id" to requestId, "p_photo_path" to photoPath)
+        try {
+            client.postgrest.rpc(
+                "approve_place_request",
+                buildJsonObject {
+                    put("p_request_id", requestId)
+                    put("p_photo_path", photoPath)
+                }
+            )
+        } catch (e: Exception) {
+            SupabaseErrorLog.log("POST /rest/v1/rpc/approve_place_request", e, params)
             throw e
         }
     }
