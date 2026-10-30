@@ -132,7 +132,7 @@ class PlaceRepository(private val client: SupabaseClient) {
     }
 
     /**
-     * AI-аналіз фото через Edge Function analyze-place-photo (Gemini на сервері; ключа в застосунку немає).
+     * AI-аналіз фото через Edge Function analyze-place-photo (OpenRouter на сервері; ключа в застосунку немає).
      * Не обов'язковий: якщо функція недоступна, фото зберігається без підказок.
      */
     private suspend fun analyzePhoto(photoUrl: String): AnalyzePlacePhotoResponse? {
