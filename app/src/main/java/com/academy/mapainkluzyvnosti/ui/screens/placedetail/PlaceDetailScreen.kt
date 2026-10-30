@@ -70,7 +70,6 @@ import com.academy.mapainkluzyvnosti.ui.components.formatCheckDate
 import com.academy.mapainkluzyvnosti.ui.components.OpenDataSourceNote
 import com.academy.mapainkluzyvnosti.ui.components.OpenDataTag
 import com.academy.mapainkluzyvnosti.ui.components.PrimaryButton
-import com.academy.mapainkluzyvnosti.ui.components.RatingRow
 import com.academy.mapainkluzyvnosti.ui.components.SecondaryButton
 import com.academy.mapainkluzyvnosti.ui.components.StatusBadge
 import com.academy.mapainkluzyvnosti.ui.components.visual
@@ -146,6 +145,16 @@ fun PlaceDetailScreen(
         )
     }
 
+    if (uiState.showReviewForm) {
+        ReviewDialog(
+            existing = uiState.myReview,
+            isSaving = uiState.isSavingReview,
+            error = uiState.reviewError,
+            onSubmit = viewModel::submitReview,
+            onDismiss = viewModel::dismissReviewForm
+        )
+    }
+
     if (uiState.showReportDialog) {
         ReportPlaceDialog(
             isSending = uiState.isReporting,
@@ -196,6 +205,12 @@ fun PlaceDetailScreen(
                                 modifier = Modifier.padding(top = 16.dp)
                             )
 
+                            ReviewSummary(
+                                rating = place.rating,
+                                reviewCount = place.reviewCount,
+                                modifier = Modifier.padding(top = 6.dp)
+                            )
+
                             FlowRow(
                                 modifier = Modifier.padding(top = 10.dp),
                                 horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -203,15 +218,6 @@ fun PlaceDetailScreen(
                                 itemVerticalAlignment = Alignment.CenterVertically
                             ) {
                                 CategoryChip(category = place.category, showIcon = false)
-                                if (place.rating != null) {
-                                    RatingRow(rating = place.rating, reviewCount = place.reviewCount)
-                                } else {
-                                    Text(
-                                        text = "Ще немає відгуків",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
                                 StatusBadge(status = place.status)
                                 place.checks?.checkedAt?.let(::formatCheckDate)?.let { date ->
                                     Text(
@@ -298,6 +304,14 @@ fun PlaceDetailScreen(
                                     )
                                 }
                             }
+
+                            ReviewsSection(
+                                reviews = uiState.reviews,
+                                canWriteReview = uiState.canWriteReview,
+                                hasOwnReview = uiState.myReview != null,
+                                onWriteReview = viewModel::openReviewForm,
+                                modifier = Modifier.padding(bottom = 20.dp)
+                            )
                         }
                     }
 

@@ -12,6 +12,7 @@ import com.academy.mapainkluzyvnosti.data.repository.FavoriteRepository
 import com.academy.mapainkluzyvnosti.data.repository.PlaceRepository
 import com.academy.mapainkluzyvnosti.data.repository.AdminRepository
 import com.academy.mapainkluzyvnosti.data.repository.PlaceRequestRepository
+import com.academy.mapainkluzyvnosti.data.repository.ReviewRepository
 import com.academy.mapainkluzyvnosti.data.repository.SosRepository
 import com.academy.mapainkluzyvnosti.data.repository.UserPlaceRepository
 import com.academy.mapainkluzyvnosti.domain.usecase.BuildRoute
@@ -73,6 +74,7 @@ val repositoryModule = module {
     single { SosRepository(get()) }
     single { UserPlaceRepository(get(), get()) }
     single { PlaceRequestRepository(get()) }
+    single { ReviewRepository(get()) }
     single { AdminRepository(get()) }
 }
 
@@ -109,7 +111,7 @@ val viewModelModule = module {
     viewModel { AdminUsersViewModel(get(), get()) }
     viewModel { SearchViewModel(get()) }
     viewModel { FiltersViewModel(get()) }
-    viewModel { (placeId: String) -> PlaceDetailViewModel(placeId, get(), get(), get(), get(), get()) }
+    viewModel { (placeId: String) -> PlaceDetailViewModel(placeId, get(), get(), get(), get(), get(), get()) }
     viewModel { (placeId: String) -> QuickCheckViewModel(placeId, get(), get(), get(), get(), get()) }
     viewModel { (placeId: String) -> PhotoUploadViewModel(placeId, get(), get(), get()) }
     viewModel { (placeId: String) -> RouteViewModel(get(), get(), get(), get(), placeId) }

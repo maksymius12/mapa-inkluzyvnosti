@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.academy.mapainkluzyvnosti.data.model.AppUser
 import com.academy.mapainkluzyvnosti.data.model.Place
+import com.academy.mapainkluzyvnosti.data.model.PlaceReview
 import com.academy.mapainkluzyvnosti.data.model.UserAgeGroup
 import com.academy.mapainkluzyvnosti.data.remote.dto.PlacePhotoDto
 import com.academy.mapainkluzyvnosti.data.remote.toSaveErrorMessage
@@ -11,10 +12,12 @@ import com.academy.mapainkluzyvnosti.data.remote.toUserMessage
 import com.academy.mapainkluzyvnosti.data.repository.FavoriteRepository
 import com.academy.mapainkluzyvnosti.data.repository.PlaceReportReason
 import com.academy.mapainkluzyvnosti.data.repository.PlaceRepository
+import com.academy.mapainkluzyvnosti.data.repository.ReviewRepository
 import com.academy.mapainkluzyvnosti.data.repository.UserPlaceRepository
 import com.academy.mapainkluzyvnosti.ui.components.PlaceFormState
 import com.academy.mapainkluzyvnosti.ui.state.CurrentUserStore
 import com.academy.mapainkluzyvnosti.ui.state.DemoModeStore
+import io.github.jan.supabase.postgrest.exception.PostgrestRestException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -41,6 +44,11 @@ data class PlaceDetailUiState(
     val isReporting: Boolean = false,
     val reportError: String? = null,
     val hasReported: Boolean = false,
+    /** Відгуки до місця, найновіші зверху. */
+    val reviews: List<PlaceReview> = emptyList(),
+    val showReviewForm: Boolean = false,
+    val isSavingReview: Boolean = false,
+    val reviewError: String? = null,
     /** Одноразове повідомлення для снекбара. */
     val message: String? = null
 ) {
@@ -57,6 +65,12 @@ data class PlaceDetailUiState(
 
     /** Поскаржитися можна на чуже додане користувачем місце (гостю — діалог гейту). */
     val canReport: Boolean get() = place?.isUserAdded == true && !isOwnPlace
+
+    /** Залишати відгуки можуть лише залогінені (не гість). */
+    val canWriteReview: Boolean get() = currentUser != null && !isDemoMode
+
+    /** Власний відгук — тоді замість «Залишити» кнопка «Редагувати свій відгук». */
+    val myReview: PlaceReview? get() = currentUser?.let { user -> reviews.firstOrNull { it.userId == user.id } }
 }
 
 class PlaceDetailViewModel(
@@ -64,6 +78,7 @@ class PlaceDetailViewModel(
     private val placeRepository: PlaceRepository,
     private val favoriteRepository: FavoriteRepository,
     private val userPlaceRepository: UserPlaceRepository,
+    private val reviewRepository: ReviewRepository,
     private val currentUserStore: CurrentUserStore,
     private val demoModeStore: DemoModeStore
 ) : ViewModel() {
@@ -97,9 +112,18 @@ class PlaceDetailViewModel(
                 if (_uiState.value.canReport && currentUserStore.user.value != null && !demoModeStore.isDemoMode.value) {
                     loadReportState()
                 }
+                loadReviews()
             }.onFailure { e ->
                 _uiState.update { it.copy(isLoading = false, errorMessage = e.toUserMessage("Не вдалося завантажити місце")) }
             }
+        }
+    }
+
+    /** Окремо від місця: якщо відгуки не завантажились, саме місце все одно показуємо. */
+    private fun loadReviews() {
+        viewModelScope.launch {
+            runCatching { reviewRepository.reviews(placeId) }
+                .onSuccess { list -> _uiState.update { it.copy(reviews = list) } }
         }
     }
 
@@ -216,6 +240,51 @@ class PlaceDetailViewModel(
                 .onFailure { e ->
                     _uiState.update { it.copy(isReporting = false, reportError = e.toUserMessage("Не вдалося надіслати скаргу. Спробуйте ще раз")) }
                 }
+        }
+    }
+
+    // ---- Відгуки ----
+
+    fun openReviewForm() {
+        if (!_uiState.value.canWriteReview) return
+        _uiState.update { it.copy(showReviewForm = true, reviewError = null) }
+    }
+
+    fun dismissReviewForm() = _uiState.update { it.copy(showReviewForm = false, reviewError = null) }
+
+    fun submitReview(rating: Int, comment: String) {
+        val state = _uiState.value
+        val userId = currentUserStore.user.value?.id ?: return
+        if (state.isSavingReview || !state.canWriteReview || rating !in 1..5) return
+        val text = comment.trim().ifBlank { null }
+        val existing = state.myReview
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSavingReview = true, reviewError = null) }
+            runCatching {
+                if (existing != null) {
+                    reviewRepository.updateReview(existing.id, rating, text)
+                } else {
+                    reviewRepository.addReview(placeId, userId, rating, text)
+                }
+            }.onSuccess {
+                _uiState.update {
+                    it.copy(
+                        isSavingReview = false,
+                        showReviewForm = false,
+                        message = if (existing != null) "Відгук оновлено" else "Дякуємо за відгук!"
+                    )
+                }
+                // Свіжий середній рейтинг місця (рахує тригер) і список відгуків.
+                load(showSpinner = false)
+            }.onFailure { e ->
+                val error = if ((e as? PostgrestRestException)?.code == "23505") {
+                    loadReviews()
+                    "Ви вже залишили відгук на це місце — його можна відредагувати"
+                } else {
+                    e.toUserMessage("Не вдалося зберегти відгук. Спробуйте ще раз")
+                }
+                _uiState.update { it.copy(isSavingReview = false, reviewError = error) }
+            }
         }
     }
 

@@ -20,8 +20,9 @@ data class PlaceReadDto(
     val status: AccessStatus,
     val source: String,
     @SerialName("verified_note") val verifiedNote: String,
-    val rating: Double? = null,
-    @SerialName("review_count") val reviewCount: Int = 0,
+    /** Середній рейтинг і кількість відгуків із place_reviews — оновлює тригер (20261030130000_place_reviews.sql). */
+    @SerialName("avg_rating") val rating: Double? = null,
+    @SerialName("reviews_count") val reviewCount: Int = 0,
     @SerialName("has_accessible_parking") val hasAccessibleParking: Boolean = false,
     /** Автор користувацького місця (source = "user"); null — OSM або старі записи. */
     @SerialName("created_by") val createdBy: String? = null,
