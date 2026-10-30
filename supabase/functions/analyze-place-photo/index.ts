@@ -1,19 +1,25 @@
 // supabase/functions/analyze-place-photo/index.ts
 //
-// Аналіз фото входу до місця через Gemini. Застосунок викликає лише цю функцію
-// (supabase.functions.invoke("analyze-place-photo", { photoUrl })) і ніколи не бачить ключ Gemini.
+// Аналіз фото входу до місця через OpenRouter (OpenAI-сумісний chat/completions, модель openai/gpt-4o).
+// Застосунок викликає лише цю функцію (supabase.functions.invoke("analyze-place-photo", { photoUrl }))
+// і ніколи не бачить ключ OpenRouter.
 //
 // Налаштування (один раз):
 //   1. Секрет із ключем — ТІЛЬКИ як секрет функції, ніколи не в коді чи git:
-//        Dashboard → Project Settings → Edge Functions → Secrets → GEMINI_API_KEY
-//      або CLI: supabase secrets set GEMINI_API_KEY=...
-//      Необов'язково: GEMINI_MODEL (за замовчуванням gemini-flash-latest).
+//        Dashboard → Edge Functions → Secrets → OPENROUTER_API_KEY
+//      або CLI: supabase secrets set OPENROUTER_API_KEY=...
 //   2. Деплой: supabase functions deploy analyze-place-photo
 //      (або Dashboard → Edge Functions → Create → вставити цей код). «Enforce JWT Verification» лишити
 //      увімкненим; функція додатково перевіряє, що викликав саме авторизований користувач, а не анонім.
 //
 // Відповідь: {"title": "...", "suggestions": ["..."], "status": "accessible" | "partial" | "barrier"}.
 // SUPABASE_URL і SUPABASE_ANON_KEY Supabase підставляє автоматично.
+
+const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
+const MODEL = "openai/gpt-4o";
+const APP_URL = "https://github.com/maksymius12/mapa-inkluzyvnosti";
+// Значення HTTP-заголовків — лише ASCII (fetch відхиляє кирилицю), тому назва транслітом.
+const APP_TITLE = "Mapa Inkluzyvnosti";
 
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const STATUSES = ["accessible", "partial", "barrier"];
@@ -25,14 +31,23 @@ const PROMPT =
   "partial — є перешкоди, але вхід можливий, barrier — без сторонньої допомоги не потрапити. " +
   "Якщо на фото не видно входу чи будівлі, так і напиши в заголовку і постав partial.";
 
-const RESPONSE_SCHEMA = {
-  type: "OBJECT",
-  properties: {
-    title: { type: "STRING" },
-    suggestions: { type: "ARRAY", items: { type: "STRING" } },
-    status: { type: "STRING", enum: STATUSES },
+// Structured outputs (OpenAI json_schema, strict): модель гарантовано повертає саме цей JSON.
+const RESPONSE_FORMAT = {
+  type: "json_schema",
+  json_schema: {
+    name: "accessibility_analysis",
+    strict: true,
+    schema: {
+      type: "object",
+      properties: {
+        title: { type: "string" },
+        suggestions: { type: "array", items: { type: "string" } },
+        status: { type: "string", enum: STATUSES },
+      },
+      required: ["title", "suggestions", "status"],
+      additionalProperties: false,
+    },
   },
-  required: ["title", "suggestions", "status"],
 };
 
 function json(body: unknown, status = 200): Response {
@@ -52,13 +67,12 @@ Deno.serve(async (req) => {
   try {
     if (req.method !== "POST") return json({ error: "method not allowed" }, 405);
 
-    const apiKey = Deno.env.get("GEMINI_API_KEY");
-    if (!apiKey) return json({ error: "GEMINI_API_KEY is not configured" }, 500);
-    const model = Deno.env.get("GEMINI_MODEL") ?? "gemini-flash-latest";
+    const apiKey = Deno.env.get("OPENROUTER_API_KEY");
+    if (!apiKey) return json({ error: "OPENROUTER_API_KEY is not configured" }, 500);
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 
-    // Лише авторизовані користувачі: анонімний ключ є в кожному APK, тож без цього ключ Gemini
+    // Лише авторизовані користувачі: анонімний ключ є в кожному APK, тож без цього кредити OpenRouter
     // міг би витрачати будь-хто.
     const authHeader = req.headers.get("Authorization") ?? "";
     const userRes = await fetch(`${supabaseUrl}/auth/v1/user`, {
@@ -73,6 +87,8 @@ Deno.serve(async (req) => {
       return json({ error: "photoUrl must point to the place-photos bucket" }, 400);
     }
 
+    // Фото завантажуємо самі й передаємо як data URL: перевіряємо тип і розмір, і моделі не треба
+    // самій ходити по посилання.
     const imageRes = await fetch(photoUrl);
     if (!imageRes.ok) return json({ error: `photo fetch failed: ${imageRes.status}` }, 400);
     const mimeType = (imageRes.headers.get("Content-Type") ?? "image/jpeg").split(";")[0];
@@ -80,37 +96,36 @@ Deno.serve(async (req) => {
     const image = new Uint8Array(await imageRes.arrayBuffer());
     if (image.length > MAX_IMAGE_BYTES) return json({ error: "photo is too large" }, 413);
 
-    const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-        body: JSON.stringify({
-          contents: [{
-            role: "user",
-            parts: [
-              { text: PROMPT },
-              { inline_data: { mime_type: mimeType, data: toBase64(image) } },
-            ],
-          }],
-          generationConfig: {
-            responseMimeType: "application/json",
-            responseSchema: RESPONSE_SCHEMA,
-            temperature: 0.2,
-          },
-        }),
+    const aiRes = await fetch(OPENROUTER_URL, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": APP_URL,
+        "X-Title": APP_TITLE,
       },
-    );
-    if (!geminiRes.ok) {
-      // Текст помилки Gemini не містить ключа; логуємо для діагностики в Dashboard → Edge Functions → Logs.
-      console.error("gemini error", geminiRes.status, await geminiRes.text());
+      body: JSON.stringify({
+        model: MODEL,
+        messages: [{
+          role: "user",
+          content: [
+            { type: "text", text: PROMPT },
+            { type: "image_url", image_url: { url: `data:${mimeType};base64,${toBase64(image)}` } },
+          ],
+        }],
+        response_format: RESPONSE_FORMAT,
+        temperature: 0.2,
+        max_tokens: 500,
+      }),
+    });
+    const data = await aiRes.json().catch(() => null);
+    if (!aiRes.ok || !data || data.error) {
+      // Тіло помилки OpenRouter не містить ключа; логуємо для діагностики в Dashboard → Edge Functions → Logs.
+      console.error("openrouter error", aiRes.status, JSON.stringify(data?.error ?? data));
       return json({ error: "analysis failed" }, 502);
     }
 
-    const data = await geminiRes.json();
-    const text: string = (data?.candidates?.[0]?.content?.parts ?? [])
-      .map((p: { text?: string }) => p.text ?? "")
-      .join("");
+    const text: string = data?.choices?.[0]?.message?.content ?? "";
     const parsed = JSON.parse(text);
 
     const suggestions = Array.isArray(parsed.suggestions)
