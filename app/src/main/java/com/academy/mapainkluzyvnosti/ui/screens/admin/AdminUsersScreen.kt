@@ -2,6 +2,7 @@ package com.academy.mapainkluzyvnosti.ui.screens.admin
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -25,14 +26,18 @@ import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -45,15 +50,19 @@ import com.academy.mapainkluzyvnosti.ui.screens.settings.ageGroupLabel
 import com.academy.mapainkluzyvnosti.ui.screens.settings.purposeRoleLabel
 import org.koin.compose.viewmodel.koinViewModel
 
+private val AdminTabs = listOf("Користувачі", "Звіти", "Аналітика")
+
 /**
- * Мінімальна адмін-панель: список користувачів (пошук за поштою чи ім'ям), роль «Користувач»/«Адмін»
- * з підтвердженням і мета користування. Сервер окремо перевіряє права (RPC admin_*).
+ * Адмін-панель з трьома вкладками: користувачі (пошук, роль «Користувач»/«Адмін» з підтвердженням,
+ * мета користування), звіти «Цього місця не існує» і аналітика за місяць.
+ * Сервер окремо перевіряє права (RPC admin_*).
  */
 @Composable
 fun AdminUsersScreen(onBack: () -> Unit, viewModel: AdminUsersViewModel = koinViewModel()) {
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     var roleChange by remember { mutableStateOf<Pair<AdminUser, UserRole>?>(null) }
+    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
 
     LaunchedEffect(uiState.message, uiState.errorMessage) {
         (uiState.message ?: uiState.errorMessage)?.let {
@@ -77,35 +86,15 @@ fun AdminUsersScreen(onBack: () -> Unit, viewModel: AdminUsersViewModel = koinVi
         if (!uiState.isAdmin) {
             CenteredText("Недостатньо прав: розділ доступний лише адміністраторам")
         } else {
-            OutlinedTextField(
-                value = uiState.search,
-                onValueChange = viewModel::onSearchChange,
-                label = { Text("Пошук за поштою або ім'ям") },
-                leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
-            )
-            when {
-                uiState.isLoading && uiState.users.isEmpty() -> Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) { CircularProgressIndicator() }
-                uiState.users.isEmpty() -> CenteredText("Користувачів не знайдено")
-                else -> LazyColumn(
-                    modifier = Modifier.weight(1f).fillMaxWidth(),
-                    contentPadding = PaddingValues(16.dp)
-                ) {
-                    items(uiState.users, key = { it.id }) { user ->
-                        UserCard(
-                            user = user,
-                            isSelf = user.id == uiState.currentUserId,
-                            isActing = uiState.isActing,
-                            onRoleChange = { role -> if (role != user.role) roleChange = user to role },
-                            onPurposeChange = { viewModel.setPurpose(user, it) },
-                            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
-                        )
-                    }
+            TabRow(selectedTabIndex = selectedTab, modifier = Modifier.padding(bottom = 12.dp)) {
+                AdminTabs.forEachIndexed { index, title ->
+                    Tab(selected = selectedTab == index, onClick = { selectedTab = index }, text = { Text(title) })
                 }
+            }
+            when (selectedTab) {
+                1 -> Box(modifier = Modifier.weight(1f)) { AdminReportsTab(snackbarHostState) }
+                2 -> Box(modifier = Modifier.weight(1f)) { AdminStatsTab() }
+                else -> UsersTab(uiState, viewModel, onRoleChangeRequest = { roleChange = it })
             }
         }
 
@@ -134,6 +123,44 @@ fun AdminUsersScreen(onBack: () -> Unit, viewModel: AdminUsersViewModel = koinVi
             },
             dismissButton = { TextButton(onClick = { roleChange = null }) { Text("Скасувати") } }
         )
+    }
+}
+
+@Composable
+private fun ColumnScope.UsersTab(
+    uiState: AdminUsersUiState,
+    viewModel: AdminUsersViewModel,
+    onRoleChangeRequest: (Pair<AdminUser, UserRole>) -> Unit
+) {
+    OutlinedTextField(
+        value = uiState.search,
+        onValueChange = viewModel::onSearchChange,
+        label = { Text("Пошук за поштою або ім'ям") },
+        leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+    )
+    when {
+        uiState.isLoading && uiState.users.isEmpty() -> Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) { CircularProgressIndicator() }
+        uiState.users.isEmpty() -> CenteredText("Користувачів не знайдено")
+        else -> LazyColumn(
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+            contentPadding = PaddingValues(16.dp)
+        ) {
+            items(uiState.users, key = { it.id }) { user ->
+                UserCard(
+                    user = user,
+                    isSelf = user.id == uiState.currentUserId,
+                    isActing = uiState.isActing,
+                    onRoleChange = { role -> if (role != user.role) onRoleChangeRequest(user to role) },
+                    onPurposeChange = { viewModel.setPurpose(user, it) },
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+                )
+            }
+        }
     }
 }
 

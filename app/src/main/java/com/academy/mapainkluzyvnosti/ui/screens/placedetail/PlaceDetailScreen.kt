@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.PlaylistAddCheck
+import androidx.compose.material.icons.filled.WrongLocation
 import androidx.compose.material.icons.outlined.Accessible
 import androidx.compose.material.icons.outlined.Elevator
 import androidx.compose.material.icons.outlined.Hail
@@ -72,6 +73,7 @@ import com.academy.mapainkluzyvnosti.ui.components.OpenDataTag
 import com.academy.mapainkluzyvnosti.ui.components.PrimaryButton
 import com.academy.mapainkluzyvnosti.ui.components.SecondaryButton
 import com.academy.mapainkluzyvnosti.ui.components.StatusBadge
+import com.academy.mapainkluzyvnosti.ui.components.rememberPhotoPicker
 import com.academy.mapainkluzyvnosti.ui.components.visual
 import com.academy.mapainkluzyvnosti.ui.theme.StatusAccessible
 import org.koin.compose.viewmodel.koinViewModel
@@ -145,6 +147,22 @@ fun PlaceDetailScreen(
         )
     }
 
+    // Галерея/камера для фото до звіту «Цього місця не існує».
+    val existencePhotoPicker = rememberPhotoPicker(onPhoto = viewModel::setExistencePhoto)
+
+    if (uiState.showExistenceForm) {
+        ExistenceReportDialog(
+            photo = uiState.existencePhoto,
+            isSending = uiState.isSendingExistence,
+            error = uiState.existenceError,
+            onPickFromGallery = existencePhotoPicker::pickFromGallery,
+            onTakePhoto = existencePhotoPicker::takePhoto,
+            onRemovePhoto = viewModel::removeExistencePhoto,
+            onSubmit = viewModel::submitExistenceReport,
+            onDismiss = viewModel::dismissExistenceForm
+        )
+    }
+
     if (uiState.showReviewForm) {
         ReviewDialog(
             existing = uiState.myReview,
@@ -177,11 +195,19 @@ fun PlaceDetailScreen(
                     Row(modifier = Modifier.fillMaxWidth().padding(8.dp)) {
                         IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад") }
                     }
+                    // Помилка завантаження (мережа, сервер) — не те саме, що «місця немає».
                     Text(
-                        text = "Місце не знайдено",
+                        text = uiState.errorMessage ?: "Місце не знайдено",
                         textAlign = TextAlign.Center,
                         modifier = Modifier.padding(24.dp)
                     )
+                    if (uiState.errorMessage != null) {
+                        SecondaryButton(
+                            text = "Спробувати ще раз",
+                            onClick = { viewModel.load() },
+                            modifier = Modifier.padding(horizontal = 24.dp)
+                        )
+                    }
                 }
                 else -> {
                     Column(
@@ -301,6 +327,13 @@ fun PlaceDetailScreen(
                                         text = if (uiState.hasReported) "Скаргу надіслано" else "Поскаржитися",
                                         icon = Icons.Filled.Flag,
                                         onClick = viewModel::requestReport
+                                    )
+                                }
+                                if (uiState.canReportNonExistence) {
+                                    SecondaryButton(
+                                        text = "Цього місця не існує",
+                                        icon = Icons.Filled.WrongLocation,
+                                        onClick = viewModel::openExistenceForm
                                     )
                                 }
                             }

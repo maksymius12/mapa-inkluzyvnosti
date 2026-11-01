@@ -126,6 +126,14 @@ fun PhotoUploadScreen(
             uiState.result?.let { result ->
                 Column(modifier = Modifier.padding(top = 24.dp)) {
                     Text(text = "Результат аналізу", style = MaterialTheme.typography.titleMedium)
+                    if (uiState.analysisFailed) {
+                        Text(
+                            text = "Фото збережено, але ШІ-аналіз зараз не вдався. Статус можна оцінити вручну через перевірку.",
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                    }
                     result.aiTitle?.let {
                         Text(text = it, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = 8.dp))
                     }

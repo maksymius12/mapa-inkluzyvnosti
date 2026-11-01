@@ -1,5 +1,6 @@
 package com.academy.mapainkluzyvnosti.ui.screens.login
 
+import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -35,7 +36,9 @@ import androidx.compose.ui.unit.dp
 import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
+import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.credentials.exceptions.GetCredentialException
+import androidx.credentials.exceptions.NoCredentialException
 import com.academy.mapainkluzyvnosti.BuildConfig
 import com.academy.mapainkluzyvnosti.ui.components.PrimaryButton
 import com.academy.mapainkluzyvnosti.ui.components.SecondaryButton
@@ -92,8 +95,14 @@ fun LoginScreen(
                     val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(credential.data)
                     viewModel.signInWithGoogleIdToken(googleIdTokenCredential.idToken)
                 }
+            } catch (e: GetCredentialCancellationException) {
+                // Користувач сам закрив вибір акаунта — нічого не показуємо.
+            } catch (e: NoCredentialException) {
+                viewModel.showGoogleSignInError("На пристрої немає Google-акаунта. Додайте його в налаштуваннях телефону")
             } catch (e: GetCredentialException) {
-                // Користувач скасував вибір акаунта — нічого не робимо.
+                // Найчастіше — неправильний Client ID або SHA-1 у Google Cloud Console.
+                Log.e("GoogleSignIn", "getCredential failed: ${e.type}", e)
+                viewModel.showGoogleSignInError("Не вдалося увійти через Google. Спробуйте ще раз або увійдіть через email")
             }
         }
     }

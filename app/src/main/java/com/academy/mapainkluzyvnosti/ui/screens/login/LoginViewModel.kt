@@ -75,6 +75,10 @@ class LoginViewModel(
         launchSignIn(email = null) { authRepository.signInWithGoogleIdToken(idToken) }
     }
 
+    fun showGoogleSignInError(message: String) {
+        _uiState.update { it.copy(isLoading = false, errorMessage = message) }
+    }
+
     /** Гостьовий режим — локальний прапорець, без жодного звернення до Supabase Auth. */
     fun continueAsGuest() {
         demoModeStore.enable()

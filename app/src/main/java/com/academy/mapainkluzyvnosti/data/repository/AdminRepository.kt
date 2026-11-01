@@ -10,6 +10,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import java.time.LocalDate
 
 /** Користувач у списку адмін-панелі (з auth.users + profiles). */
 data class AdminUser(
@@ -29,6 +30,18 @@ private data class AdminUserDto(
     val role: UserRole = UserRole.USER,
     @SerialName("purpose_role") val purposeRole: UserPurposeRole? = null,
     @SerialName("age_group") val ageGroup: UserAgeGroup? = null
+)
+
+/** Метрики адмін-панелі за один місяць (RPC admin_monthly_stats, міграція 20261101120000). */
+@Serializable
+data class MonthlyStats(
+    @SerialName("new_users") val newUsers: Int = 0,
+    @SerialName("requests_total") val requestsTotal: Int = 0,
+    @SerialName("requests_approved") val requestsApproved: Int = 0,
+    @SerialName("requests_rejected") val requestsRejected: Int = 0,
+    @SerialName("new_reviews") val newReviews: Int = 0,
+    @SerialName("existence_reports_total") val existenceReportsTotal: Int = 0,
+    @SerialName("existence_reports_approved") val existenceReportsApproved: Int = 0
 )
 
 /**
@@ -77,6 +90,16 @@ class AdminRepository(private val client: SupabaseClient) {
             throw e
         }
     }
+
+    /** [month] — будь-який день потрібного місяця. */
+    suspend fun monthlyStats(month: LocalDate): MonthlyStats =
+        try {
+            client.postgrest.rpc("admin_monthly_stats", buildJsonObject { put("p_month", month.toString()) })
+                .decodeList<MonthlyStats>().firstOrNull() ?: MonthlyStats()
+        } catch (e: Exception) {
+            SupabaseErrorLog.log("POST /rest/v1/rpc/admin_monthly_stats", e, mapOf("p_month" to month))
+            throw e
+        }
 
     private fun AdminUserDto.toDomain() = AdminUser(
         id = id,

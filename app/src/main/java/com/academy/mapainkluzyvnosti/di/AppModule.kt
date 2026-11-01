@@ -11,6 +11,7 @@ import com.academy.mapainkluzyvnosti.data.repository.CheckRepository
 import com.academy.mapainkluzyvnosti.data.repository.FavoriteRepository
 import com.academy.mapainkluzyvnosti.data.repository.PlaceRepository
 import com.academy.mapainkluzyvnosti.data.repository.AdminRepository
+import com.academy.mapainkluzyvnosti.data.repository.ExistenceReportRepository
 import com.academy.mapainkluzyvnosti.data.repository.PlaceRequestRepository
 import com.academy.mapainkluzyvnosti.data.repository.ReviewRepository
 import com.academy.mapainkluzyvnosti.data.repository.SosRepository
@@ -27,6 +28,8 @@ import com.academy.mapainkluzyvnosti.ui.screens.login.SignUpViewModel
 import com.academy.mapainkluzyvnosti.ui.screens.map.AddPlaceViewModel
 import com.academy.mapainkluzyvnosti.ui.screens.map.MapViewModel
 import com.academy.mapainkluzyvnosti.ui.screens.photoupload.PhotoUploadViewModel
+import com.academy.mapainkluzyvnosti.ui.screens.admin.AdminReportsViewModel
+import com.academy.mapainkluzyvnosti.ui.screens.admin.AdminStatsViewModel
 import com.academy.mapainkluzyvnosti.ui.screens.admin.AdminUsersViewModel
 import com.academy.mapainkluzyvnosti.ui.screens.requests.PlaceRequestsViewModel
 import com.academy.mapainkluzyvnosti.ui.screens.placedetail.PlaceDetailViewModel
@@ -76,6 +79,7 @@ val repositoryModule = module {
     single { PlaceRequestRepository(get()) }
     single { ReviewRepository(get()) }
     single { AdminRepository(get()) }
+    single { ExistenceReportRepository(get()) }
 }
 
 val useCaseModule = module {
@@ -109,9 +113,11 @@ val viewModelModule = module {
     viewModel { AddPlaceViewModel(get(), get(), get(), get(), get()) }
     viewModel { PlaceRequestsViewModel(get(), get()) }
     viewModel { AdminUsersViewModel(get(), get()) }
+    viewModel { AdminReportsViewModel(get()) }
+    viewModel { AdminStatsViewModel(get()) }
     viewModel { SearchViewModel(get()) }
     viewModel { FiltersViewModel(get()) }
-    viewModel { (placeId: String) -> PlaceDetailViewModel(placeId, get(), get(), get(), get(), get(), get()) }
+    viewModel { (placeId: String) -> PlaceDetailViewModel(placeId, get(), get(), get(), get(), get(), get(), get()) }
     viewModel { (placeId: String) -> QuickCheckViewModel(placeId, get(), get(), get(), get(), get()) }
     viewModel { (placeId: String) -> PhotoUploadViewModel(placeId, get(), get(), get()) }
     viewModel { (placeId: String) -> RouteViewModel(get(), get(), get(), get(), placeId) }

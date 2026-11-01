@@ -1,20 +1,23 @@
 package com.academy.mapainkluzyvnosti.ui.screens.placedetail
 
+import android.graphics.Bitmap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.academy.mapainkluzyvnosti.data.model.AppUser
 import com.academy.mapainkluzyvnosti.data.model.Place
 import com.academy.mapainkluzyvnosti.data.model.PlaceReview
-import com.academy.mapainkluzyvnosti.data.model.UserAgeGroup
 import com.academy.mapainkluzyvnosti.data.remote.dto.PlacePhotoDto
+import com.academy.mapainkluzyvnosti.data.remote.SupabaseErrorLog
 import com.academy.mapainkluzyvnosti.data.remote.toSaveErrorMessage
 import com.academy.mapainkluzyvnosti.data.remote.toUserMessage
+import com.academy.mapainkluzyvnosti.data.repository.ExistenceReportRepository
 import com.academy.mapainkluzyvnosti.data.repository.FavoriteRepository
 import com.academy.mapainkluzyvnosti.data.repository.PlaceReportReason
 import com.academy.mapainkluzyvnosti.data.repository.PlaceRepository
 import com.academy.mapainkluzyvnosti.data.repository.ReviewRepository
 import com.academy.mapainkluzyvnosti.data.repository.UserPlaceRepository
 import com.academy.mapainkluzyvnosti.ui.components.PlaceFormState
+import com.academy.mapainkluzyvnosti.ui.components.toJpegBytes
 import com.academy.mapainkluzyvnosti.ui.state.CurrentUserStore
 import com.academy.mapainkluzyvnosti.ui.state.DemoModeStore
 import io.github.jan.supabase.postgrest.exception.PostgrestRestException
@@ -49,11 +52,17 @@ data class PlaceDetailUiState(
     val showReviewForm: Boolean = false,
     val isSavingReview: Boolean = false,
     val reviewError: String? = null,
+    /** Форма «Цього місця не існує». */
+    val showExistenceForm: Boolean = false,
+    val existencePhoto: Bitmap? = null,
+    val isSendingExistence: Boolean = false,
+    val existenceError: String? = null,
     /** Одноразове повідомлення для снекбара. */
     val message: String? = null
 ) {
-    // У demo-режимі кнопка доступна — саму спробу додати фото перехопить діалог гейту.
-    val canAddPhoto: Boolean get() = currentUser?.ageGroup == UserAgeGroup.ADULT || isDemoMode
+    // Фото додають учні, волонтери й адмін (як і RLS на сервері). У demo-режимі кнопка доступна —
+    // саму спробу додати фото перехопить діалог гейту.
+    val canAddPhoto: Boolean get() = currentUser?.isReviewer == true || isDemoMode
 
     /** Автор може змінити або видалити власне додане місце. */
     val isOwnPlace: Boolean
@@ -65,6 +74,9 @@ data class PlaceDetailUiState(
 
     /** Поскаржитися можна на чуже додане користувачем місце (гостю — діалог гейту). */
     val canReport: Boolean get() = place?.isUserAdded == true && !isOwnPlace
+
+    /** «Цього місця не існує» — волонтер, учень чи адмін (як і рецензування заявок; RLS на сервері так само). */
+    val canReportNonExistence: Boolean get() = currentUser?.isReviewer == true && !isDemoMode
 
     /** Залишати відгуки можуть лише залогінені (не гість). */
     val canWriteReview: Boolean get() = currentUser != null && !isDemoMode
@@ -79,6 +91,7 @@ class PlaceDetailViewModel(
     private val favoriteRepository: FavoriteRepository,
     private val userPlaceRepository: UserPlaceRepository,
     private val reviewRepository: ReviewRepository,
+    private val existenceReportRepository: ExistenceReportRepository,
     private val currentUserStore: CurrentUserStore,
     private val demoModeStore: DemoModeStore
 ) : ViewModel() {
@@ -114,6 +127,7 @@ class PlaceDetailViewModel(
                 }
                 loadReviews()
             }.onFailure { e ->
+                SupabaseErrorLog.log("load place detail", e, mapOf("id" to placeId))
                 _uiState.update { it.copy(isLoading = false, errorMessage = e.toUserMessage("Не вдалося завантажити місце")) }
             }
         }
@@ -243,6 +257,63 @@ class PlaceDetailViewModel(
         }
     }
 
+    // ---- «Цього місця не існує» ----
+
+    private var existenceJpeg: ByteArray? = null
+
+    fun openExistenceForm() {
+        if (!_uiState.value.canReportNonExistence) return
+        existenceJpeg = null
+        _uiState.update { it.copy(showExistenceForm = true, existencePhoto = null, existenceError = null) }
+    }
+
+    fun dismissExistenceForm() {
+        existenceJpeg = null
+        _uiState.update { it.copy(showExistenceForm = false, existencePhoto = null, existenceError = null) }
+    }
+
+    fun setExistencePhoto(photo: Bitmap) {
+        viewModelScope.launch {
+            existenceJpeg = photo.toJpegBytes()
+            _uiState.update { it.copy(existencePhoto = photo) }
+        }
+    }
+
+    fun removeExistencePhoto() {
+        existenceJpeg = null
+        _uiState.update { it.copy(existencePhoto = null) }
+    }
+
+    fun submitExistenceReport(comment: String) {
+        val state = _uiState.value
+        val userId = currentUserStore.user.value?.id ?: return
+        val text = comment.trim()
+        if (state.isSendingExistence || !state.canReportNonExistence || text.length < EXISTENCE_COMMENT_MIN) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSendingExistence = true, existenceError = null) }
+            runCatching { existenceReportRepository.submit(placeId, userId, text, existenceJpeg) }
+                .onSuccess {
+                    existenceJpeg = null
+                    _uiState.update {
+                        it.copy(
+                            isSendingExistence = false,
+                            showExistenceForm = false,
+                            existencePhoto = null,
+                            message = "Дякуємо! Звіт передано адміністратору"
+                        )
+                    }
+                }
+                .onFailure { e ->
+                    val error = if ((e as? PostgrestRestException)?.code == "23505") {
+                        "Ви вже повідомили про це місце — звіт очікує розгляду"
+                    } else {
+                        e.toUserMessage("Не вдалося надіслати звіт. Спробуйте ще раз")
+                    }
+                    _uiState.update { it.copy(isSendingExistence = false, existenceError = error) }
+                }
+        }
+    }
+
     // ---- Відгуки ----
 
     fun openReviewForm() {
@@ -304,6 +375,8 @@ class PlaceDetailViewModel(
                 }
             }.onSuccess {
                 _uiState.update { it.copy(isFavorite = !currentlyFavorite) }
+            }.onFailure { e ->
+                _uiState.update { it.copy(message = e.toUserMessage("Не вдалося оновити обране. Спробуйте ще раз")) }
             }
         }
     }

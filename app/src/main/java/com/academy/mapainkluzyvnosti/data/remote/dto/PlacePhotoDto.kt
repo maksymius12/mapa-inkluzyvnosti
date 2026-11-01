@@ -21,6 +21,8 @@ data class AnalyzePlacePhotoRequest(val photoUrl: String)
 
 @Serializable
 data class AnalyzePlacePhotoResponse(
+    /** false — ШІ вважає, що на фото не реальне місце (мем, скриншот тощо): таке фото не зберігаємо. */
+    val isPlacePhoto: Boolean = true,
     val title: String,
     val suggestions: List<String>,
     val status: AccessStatus

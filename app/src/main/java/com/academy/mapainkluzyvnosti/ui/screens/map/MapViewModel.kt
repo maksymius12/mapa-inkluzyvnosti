@@ -145,6 +145,9 @@ class MapViewModel(
                     _uiState.update { it.copy(selectedSosId = null) }
                     loadSosRequests()
                 }
+                .onFailure { e ->
+                    _uiState.update { it.copy(errorMessage = e.toUserMessage("Не вдалося позначити запит допомоги виконаним")) }
+                }
         }
     }
 }

@@ -12,7 +12,10 @@
 //      (або Dashboard → Edge Functions → Create → вставити цей код). «Enforce JWT Verification» лишити
 //      увімкненим; функція додатково перевіряє, що викликав саме авторизований користувач, а не анонім.
 //
-// Відповідь: {"title": "...", "suggestions": ["..."], "status": "accessible" | "partial" | "barrier"}.
+// Відповідь: {"isPlacePhoto": true | false, "title": "...", "suggestions": ["..."],
+//              "status": "accessible" | "partial" | "barrier"}.
+// isPlacePhoto = false — на фото не реальне місце (мем, скриншот, картинка з інтернету, селфі тощо):
+// застосунок таке фото не зберігає.
 // SUPABASE_URL і SUPABASE_ANON_KEY Supabase підставляє автоматично.
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
@@ -25,7 +28,10 @@ const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const STATUSES = ["accessible", "partial", "barrier"];
 
 const PROMPT =
-  "Проаналізуй фото входу до будівлі на предмет доступності для людей з інвалідністю " +
+  "Спершу визнач, чи це справжня фотографія реального місця (будівля, вхід, приміщення, вулиця), " +
+  "зроблена на камеру. Якщо це мем, скриншот, малюнок, картинка з написами чи шаблон з інтернету, " +
+  "селфі або щось, що не стосується місця, — постав isPlacePhoto = false і в заголовку коротко поясни чому. " +
+  "Інакше isPlacePhoto = true і проаналізуй фото входу до будівлі на предмет доступності для людей з інвалідністю " +
   "(сходи, пандус, поріг, ширина дверей, поручні, покриття). Дай короткий заголовок головної проблеми " +
   "(до 8 слів), 2–4 конкретні пропозиції українською і статус: accessible — бар'єрів не видно, " +
   "partial — є перешкоди, але вхід можливий, barrier — без сторонньої допомоги не потрапити. " +
@@ -40,11 +46,12 @@ const RESPONSE_FORMAT = {
     schema: {
       type: "object",
       properties: {
+        isPlacePhoto: { type: "boolean" },
         title: { type: "string" },
         suggestions: { type: "array", items: { type: "string" } },
         status: { type: "string", enum: STATUSES },
       },
-      required: ["title", "suggestions", "status"],
+      required: ["isPlacePhoto", "title", "suggestions", "status"],
       additionalProperties: false,
     },
   },
@@ -131,10 +138,15 @@ Deno.serve(async (req) => {
     const suggestions = Array.isArray(parsed.suggestions)
       ? parsed.suggestions.filter((s: unknown) => typeof s === "string" && s.trim()).slice(0, 4)
       : [];
-    if (typeof parsed.title !== "string" || !STATUSES.includes(parsed.status)) {
+    if (typeof parsed.isPlacePhoto !== "boolean" || typeof parsed.title !== "string" || !STATUSES.includes(parsed.status)) {
       return json({ error: "unexpected model output" }, 502);
     }
-    return json({ title: parsed.title.trim().slice(0, 120), suggestions, status: parsed.status });
+    return json({
+      isPlacePhoto: parsed.isPlacePhoto,
+      title: parsed.title.trim().slice(0, 120),
+      suggestions,
+      status: parsed.status,
+    });
   } catch (e) {
     console.error("analyze-place-photo", e);
     return json({ error: e instanceof Error ? e.message : String(e) }, 500);
