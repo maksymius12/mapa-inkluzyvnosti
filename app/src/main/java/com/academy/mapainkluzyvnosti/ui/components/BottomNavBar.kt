@@ -3,6 +3,7 @@ package com.academy.mapainkluzyvnosti.ui.components
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -19,12 +20,15 @@ data class BottomNavEntry(
     val label: String,
     val icon: ImageVector,
     val selected: Boolean,
+    /** Скільки чекає розгляду (бейдж на іконці); 0 — без бейджа. */
+    val badgeCount: Int = 0,
     val onClick: () -> Unit
 )
 
 /**
- * Нижня навігація: Мапа, Категорії, [SOS], Обране, Профіль. Активний пункт синій, решта приглушені.
- * [onSos] — запит допомоги як окремий червоний пункт по центру панелі (доступний з усіх вкладок).
+ * Нижня навігація: Мапа, Новини, [SOS], Обране, Профіль. Активний пункт синій, решта приглушені.
+ * [onSos] — запит допомоги як окремий червоний пункт по центру панелі (доступний з усіх вкладок);
+ * викликається після утримання кнопки ~1 с і одразу надсилає запит.
  */
 @Composable
 fun MapaBottomNavBar(entries: List<BottomNavEntry>, modifier: Modifier = Modifier, onSos: (() -> Unit)? = null) {
@@ -35,11 +39,15 @@ fun MapaBottomNavBar(entries: List<BottomNavEntry>, modifier: Modifier = Modifie
             tonalElevation = androidx.compose.ui.unit.Dp.Hairline
         ) {
             entries.forEachIndexed { index, entry ->
-                if (onSos != null && index == entries.size / 2) SosNavItem(onClick = onSos)
+                if (onSos != null && index == entries.size / 2) SosNavItem(onHoldComplete = onSos)
                 NavigationBarItem(
                     selected = entry.selected,
                     onClick = entry.onClick,
-                    icon = { Icon(entry.icon, contentDescription = entry.label) },
+                    icon = {
+                        BadgedBox(badge = { CountBadge(entry.badgeCount) }) {
+                            Icon(entry.icon, contentDescription = entry.label)
+                        }
+                    },
                     label = { Text(entry.label, style = MaterialTheme.typography.labelMedium) },
                     colors = NavigationBarItemDefaults.colors(
                         selectedIconColor = MaterialTheme.colorScheme.primary,

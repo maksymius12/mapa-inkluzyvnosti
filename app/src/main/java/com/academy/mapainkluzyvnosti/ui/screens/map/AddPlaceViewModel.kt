@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.academy.mapainkluzyvnosti.data.model.GeoPoint
 import com.academy.mapainkluzyvnosti.data.model.Place
-import com.academy.mapainkluzyvnosti.data.model.UserPurposeRole
 import com.academy.mapainkluzyvnosti.data.remote.NominatimApi
 import com.academy.mapainkluzyvnosti.data.remote.toUserMessage
 import com.academy.mapainkluzyvnosti.data.repository.PlaceRequestRepository
@@ -55,8 +54,12 @@ class AddPlaceViewModel(
 
     private var addressJob: Job? = null
 
-    /** Мешканці подають заявку на розгляд замість додавання місця напряму. */
-    val isResidentRequest: Boolean get() = currentUserStore.user.value?.purposeRole == UserPurposeRole.RESIDENT
+    /**
+     * Мешканці подають заявку на розгляд; волонтер, учень і адмін публікують місце одразу (сервер так само:
+     * пряме додавання в places дозволене лише is_reviewer()). Адмін — не мешканець, навіть якщо мета
+     * користування в профілі «мешканець».
+     */
+    val isResidentRequest: Boolean get() = currentUserStore.user.value?.isReviewer != true
 
     /** Додавати можуть лише авторизовані: гостю (або без сесії) — діалог із пропозицією увійти. */
     fun startPicking(): Boolean {
@@ -136,9 +139,7 @@ class AddPlaceViewModel(
                     return@launch
                 }
             }
-            // Мешканці подають заявку на розгляд; волонтери, учні й адмін додають місце напряму.
-            val isResident = currentUserStore.user.value?.purposeRole == UserPurposeRole.RESIDENT
-            if (isResident) {
+            if (isResidentRequest) {
                 runCatching {
                     placeRequestRepository.submit(
                         name = form.name,

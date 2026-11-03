@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.AddAPhoto
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Directions
+import androidx.compose.material.icons.filled.DriveFileRenameOutline
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
@@ -144,6 +145,26 @@ fun PlaceDetailScreen(
             isDeleting = uiState.isDeleting,
             onConfirm = viewModel::confirmDelete,
             onDismiss = viewModel::dismissDelete
+        )
+    }
+
+    if (uiState.showHoursEditor && place != null) {
+        OpeningHoursDialog(
+            initial = place.openingHours,
+            isSaving = uiState.isSavingHours,
+            error = uiState.hoursError,
+            onSave = viewModel::saveHours,
+            onDismiss = viewModel::dismissHoursEditor
+        )
+    }
+
+    if (uiState.showRenameForm && place != null) {
+        SuggestRenameDialog(
+            currentName = place.name,
+            isSending = uiState.isSendingRename,
+            error = uiState.renameError,
+            onSubmit = viewModel::submitRename,
+            onDismiss = viewModel::dismissRenameForm
         )
     }
 
@@ -322,6 +343,13 @@ fun PlaceDetailScreen(
                                         )
                                     }
                                 }
+                                if (uiState.canSuggestRename) {
+                                    SecondaryButton(
+                                        text = "Запропонувати зміну назви",
+                                        icon = Icons.Filled.DriveFileRenameOutline,
+                                        onClick = viewModel::openRenameForm
+                                    )
+                                }
                                 if (uiState.canReport) {
                                     SecondaryButton(
                                         text = if (uiState.hasReported) "Скаргу надіслано" else "Поскаржитися",
@@ -337,6 +365,13 @@ fun PlaceDetailScreen(
                                     )
                                 }
                             }
+
+                            OpeningHoursSection(
+                                hours = place.openingHours,
+                                canEdit = uiState.canEditHours,
+                                onEdit = viewModel::openHoursEditor,
+                                modifier = Modifier.padding(bottom = 20.dp)
+                            )
 
                             ReviewsSection(
                                 reviews = uiState.reviews,

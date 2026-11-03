@@ -23,6 +23,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -30,6 +32,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -43,6 +46,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import com.academy.mapainkluzyvnosti.data.model.PlaceRequest
 import com.academy.mapainkluzyvnosti.data.model.PlaceRequestStatus
+import com.academy.mapainkluzyvnosti.data.repository.NameSuggestion
 import com.academy.mapainkluzyvnosti.ui.components.IconBadge
 import com.academy.mapainkluzyvnosti.ui.components.MapaCard
 import com.academy.mapainkluzyvnosti.ui.components.PhotoSourceButtons
@@ -65,6 +69,7 @@ fun PlaceRequestsScreen(onBack: () -> Unit, viewModel: PlaceRequestsViewModel = 
     var proofSourceFor by remember { mutableStateOf<PlaceRequest?>(null) }
     // Для якої заявки відкрито галерею/камеру — переживає перехід в інший застосунок.
     var proofTargetId by rememberSaveable { mutableStateOf<String?>(null) }
+    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     val photoPicker = rememberPhotoPicker { photo -> proofTargetId?.let { viewModel.setProof(it, photo) } }
 
     LaunchedEffect(uiState.message) {
@@ -89,10 +94,34 @@ fun PlaceRequestsScreen(onBack: () -> Unit, viewModel: PlaceRequestsViewModel = 
             )
         }
 
+        TabRow(selectedTabIndex = selectedTab, modifier = Modifier.padding(bottom = 4.dp)) {
+            val requestsTitle = "Нові місця"
+            val namesTitle = if (uiState.isReviewer) "Зміна назви" else "Мої пропозиції"
+            listOf(
+                requestsTitle to uiState.requests.size,
+                namesTitle to uiState.suggestions.size
+            ).forEachIndexed { index, (title, count) ->
+                Tab(
+                    selected = selectedTab == index,
+                    onClick = { selectedTab = index },
+                    text = { Text(if (uiState.isReviewer && count > 0) "$title ($count)" else title) }
+                )
+            }
+        }
+
         when {
             uiState.isLoading -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
             }
+            selectedTab == 1 -> SuggestionsList(
+                suggestions = uiState.suggestions,
+                isReviewer = uiState.isReviewer,
+                isAdmin = uiState.isAdmin,
+                currentUserId = uiState.currentUserId,
+                isActing = uiState.isActing,
+                onApprove = viewModel::approveSuggestion,
+                onReject = viewModel::rejectSuggestion
+            )
             uiState.requests.isEmpty() -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text(
                     text = if (uiState.isReviewer) "Немає заявок на розгляд" else "Ви ще не подавали заявок на нові локації",
@@ -263,6 +292,73 @@ private fun ReviewProofSection(
             Row {
                 TextButton(onClick = onAddProof, enabled = enabled) { Text("Замінити") }
                 TextButton(onClick = onRemoveProof, enabled = enabled) { Text("Прибрати") }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SuggestionsList(
+    suggestions: List<NameSuggestion>,
+    isReviewer: Boolean,
+    isAdmin: Boolean,
+    currentUserId: String?,
+    isActing: Boolean,
+    onApprove: (String) -> Unit,
+    onReject: (String) -> Unit
+) {
+    if (suggestions.isEmpty()) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text(
+                text = if (isReviewer) "Немає пропозицій зміни назви" else "Ви ще не пропонували змін назви",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 32.dp)
+            )
+        }
+        return
+    }
+    LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp)) {
+        items(suggestions, key = { it.id }) { suggestion ->
+            MapaCard(modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
+                Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+                    Text(
+                        text = "«${suggestion.currentName}» → «${suggestion.newName}»",
+                        style = MaterialTheme.typography.titleSmall
+                    )
+                    suggestion.comment?.takeIf { it.isNotBlank() }?.let {
+                        Text(
+                            text = it,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    }
+                    RequestStatusLabel(suggestion.status, null)
+                    if (isReviewer && suggestion.status == PlaceRequestStatus.PENDING) {
+                        // Власну пропозицію волонтер не схвалює сам (сервер теж перевіряє); адмін — може.
+                        val own = suggestion.suggestedBy == currentUserId && !isAdmin
+                        if (own) {
+                            Text(
+                                text = "Вашу пропозицію розгляне інший рецензент",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(top = 4.dp)
+                            )
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp)
+                        ) {
+                            TextButton(onClick = { onReject(suggestion.id) }, enabled = !isActing) {
+                                Text("Відхилити", color = MaterialTheme.colorScheme.error)
+                            }
+                            TextButton(onClick = { onApprove(suggestion.id) }, enabled = !isActing && !own) {
+                                Text("Схвалити")
+                            }
+                        }
+                    }
+                }
             }
         }
     }

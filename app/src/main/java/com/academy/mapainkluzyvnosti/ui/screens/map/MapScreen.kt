@@ -1,9 +1,6 @@
 package com.academy.mapainkluzyvnosti.ui.screens.map
 
-import android.Manifest
 import androidx.activity.compose.BackHandler
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -59,7 +56,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
-import com.academy.mapainkluzyvnosti.data.local.DeviceLocation
+import com.academy.mapainkluzyvnosti.data.local.LocationProvider
+import com.academy.mapainkluzyvnosti.data.local.LocationResult
+import com.academy.mapainkluzyvnosti.ui.components.rememberLocationPermissionRequest
 import com.academy.mapainkluzyvnosti.data.model.AccessibilityType
 import com.academy.mapainkluzyvnosti.data.model.GeoPoint
 import com.academy.mapainkluzyvnosti.data.model.Place
@@ -86,10 +85,11 @@ import com.academy.mapainkluzyvnosti.ui.maplibre.registerMarkerImages
 import com.academy.mapainkluzyvnosti.ui.maplibre.rememberMapLibreMapView
 import com.academy.mapainkluzyvnosti.ui.maplibre.setDistrictBoundary
 import com.academy.mapainkluzyvnosti.ui.maplibre.setUserLocation
-import com.academy.mapainkluzyvnosti.ui.maplibre.typeImageId
-import com.academy.mapainkluzyvnosti.ui.maplibre.unverifiedCategoryImageId
+import com.academy.mapainkluzyvnosti.ui.maplibre.placeImageId
 import com.google.gson.JsonPrimitive
 import kotlinx.coroutines.launch
+import com.academy.mapainkluzyvnosti.ui.theme.StatusPartial
+import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
@@ -130,6 +130,8 @@ fun MapScreen(
     var maplibreMap by remember { mutableStateOf<MapLibreMap?>(null) }
     var mapStyle by remember { mutableStateOf<Style?>(null) }
     var userLocation by remember { mutableStateOf<GeoPoint?>(null) }
+    val locationProvider = koinInject<LocationProvider>()
+    val locationUnreliable by locationProvider.isUnreliable.collectAsState()
 
     // Список місць і активних SOS не повинен переживати довше одного показу екрана:
     // щоразу, коли карта повертається на передній план (у т.ч. після відкриття іншої
@@ -152,17 +154,32 @@ fun MapScreen(
         )
     }
 
+    /**
+     * Спершу миттєво — кешована правдоподібна чи остання надійна позиція, потім свіжа. Ненадійну
+     * (РЕБ, спуфінг, mock) не показуємо: мапа лишається на останній надійній, а поруч з кнопкою
+     * «Моє місце» — позначка «Геолокація неточна».
+     */
     suspend fun locateUser(moveCamera: Boolean) {
-        val point = DeviceLocation.getCurrent(context)
-        if (point == null) {
-            if (moveCamera) snackbarHostState.showSnackbar("Не вдалося визначити місцезнаходження")
-            return
+        locationProvider.immediate()?.let { fix ->
+            userLocation = fix.point
+            if (moveCamera) centerOnUser(fix.point)
         }
-        userLocation = point
-        if (moveCamera) centerOnUser(point)
+        when (val result = locationProvider.current()) {
+            is LocationResult.Reliable -> {
+                userLocation = result.fix.point
+                if (moveCamera) centerOnUser(result.fix.point)
+            }
+            is LocationResult.Unreliable -> {
+                result.lastReliable?.let { userLocation = it.point }
+                if (moveCamera) snackbarHostState.showSnackbar("Геолокація неточна — показано останню надійну позицію")
+            }
+            is LocationResult.Unavailable -> {
+                if (moveCamera && userLocation == null) snackbarHostState.showSnackbar("Не вдалося визначити місцезнаходження")
+            }
+        }
     }
 
-    val locationPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+    val requestLocationPermission = rememberLocationPermissionRequest { granted ->
         if (granted) {
             scope.launch { locateUser(moveCamera = true) }
         } else {
@@ -204,7 +221,7 @@ fun MapScreen(
     }
 
     LaunchedEffect(mapStyle) {
-        if (mapStyle != null && DeviceLocation.hasPermission(context)) locateUser(moveCamera = false)
+        if (mapStyle != null && locationProvider.hasPermission()) locateUser(moveCamera = false)
     }
     LaunchedEffect(mapStyle, userLocation) {
         mapStyle?.setUserLocation(userLocation)
@@ -251,6 +268,9 @@ fun MapScreen(
         val style = mapStyle
         if (map != null && style != null) {
             SymbolManager(mapView, map, style).apply {
+                // Заклади в одному будинку стоять за кілька метрів — без цього MapLibre ховав «зайві» мітки.
+                iconAllowOverlap = true
+                iconIgnorePlacement = true
                 addClickListener { symbol ->
                     symbol.data?.asString?.let { viewModel.selectPlace(it) }
                     true
@@ -276,17 +296,12 @@ fun MapScreen(
         }
     }
 
-    // Мітка = тип доступності за легендою (з урахуванням активного чипа/фільтра).
-    LaunchedEffect(placesSymbolManager, uiState.places, uiState.activeTypes, uiState.selectedPlaceId) {
+    LaunchedEffect(placesSymbolManager, uiState.places, uiState.selectedPlaceId) {
         val manager = placesSymbolManager ?: return@LaunchedEffect
         manager.deleteAll()
         val options = uiState.places.map { place ->
-            // Додане користувачем і ще не перевірене місце — пунктирна мітка своєї категорії.
-            val image = if (place.awaitsFirstCheck) {
-                unverifiedCategoryImageId(place.category)
-            } else {
-                typeImageId(place.markerType(uiState.activeTypes))
-            }
+            // Мітка — завжди категорія; статус — бейдж у куті (фільтри лише ховають/показують місця).
+            val image = placeImageId(place.category, place.status)
             SymbolOptions()
                 .withLatLng(LatLng(place.lat, place.lng))
                 .withIconImage(image)
@@ -299,9 +314,11 @@ fun MapScreen(
     LaunchedEffect(sosSymbolManager, uiState.sosRequests) {
         val manager = sosSymbolManager ?: return@LaunchedEffect
         manager.deleteAll()
-        val options = uiState.sosRequests.map { sos ->
+        // Запити без локації на мапі не показати — їх видно в «Повідомленнях».
+        val options = uiState.sosRequests.mapNotNull { sos ->
+            val point = sos.point ?: return@mapNotNull null
             SymbolOptions()
-                .withLatLng(LatLng(sos.lat, sos.lng))
+                .withLatLng(LatLng(point.lat, point.lng))
                 .withIconImage(SOS_MARKER_IMAGE_ID)
                 .withData(JsonPrimitive(sos.id))
         }
@@ -404,10 +421,10 @@ fun MapScreen(
             SearchField(
                 onClick = onOpenSearch,
                 onLocate = {
-                    if (DeviceLocation.hasPermission(context)) {
+                    if (locationProvider.hasPermission()) {
                         scope.launch { locateUser(moveCamera = true) }
                     } else {
-                        locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                        requestLocationPermission()
                     }
                 },
                 modifier = Modifier.padding(horizontal = 16.dp)
@@ -437,12 +454,24 @@ fun MapScreen(
                 })
                 Spacer(Modifier.weight(1f))
                 Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    if (locationUnreliable) {
+                        Text(
+                            text = "Геолокація неточна",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.92f))
+                                .border(1.dp, StatusPartial, RoundedCornerShape(10.dp))
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
                     MapControlButton(
                         onClick = {
-                            if (DeviceLocation.hasPermission(context)) {
+                            if (locationProvider.hasPermission()) {
                                 scope.launch { locateUser(moveCamera = true) }
                             } else {
-                                locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                                requestLocationPermission()
                             }
                         },
                         shape = CircleShape

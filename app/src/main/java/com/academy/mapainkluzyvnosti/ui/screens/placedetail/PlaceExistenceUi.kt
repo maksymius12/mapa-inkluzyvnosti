@@ -53,7 +53,7 @@ fun ExistenceReportDialog(
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                 Text(
-                    text = "Опишіть, що ви бачите на цьому місці замість заявленого. Звіт розгляне адміністратор.",
+                    text = "Опишіть, що ви бачите на цьому місці замість заявленого. Адміністратор перевірить і прибере місце з мапи.",
                     style = MaterialTheme.typography.bodyMedium
                 )
                 OutlinedTextField(
@@ -73,7 +73,7 @@ fun ExistenceReportDialog(
                 if (photo != null) {
                     Image(
                         bitmap = photo.asImageBitmap(),
-                        contentDescription = "Фото до звіту",
+                        contentDescription = "Фото до повідомлення",
                         contentScale = ContentScale.Crop,
                         modifier = Modifier
                             .fillMaxWidth()

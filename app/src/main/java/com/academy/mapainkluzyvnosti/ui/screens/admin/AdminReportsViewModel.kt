@@ -6,6 +6,7 @@ import com.academy.mapainkluzyvnosti.data.model.PlaceRequestStatus
 import com.academy.mapainkluzyvnosti.data.remote.toUserMessage
 import com.academy.mapainkluzyvnosti.data.repository.ExistenceReport
 import com.academy.mapainkluzyvnosti.data.repository.ExistenceReportRepository
+import com.academy.mapainkluzyvnosti.ui.state.ModerationCountsStore
 import io.github.jan.supabase.postgrest.exception.PostgrestRestException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -23,8 +24,11 @@ data class AdminReportsUiState(
     val message: String? = null
 )
 
-/** Звіти «Цього місця не існує» для адміна: схвалити (місце приховується), відхилити, видалити звіт. */
-class AdminReportsViewModel(private val repository: ExistenceReportRepository) : ViewModel() {
+/** «Видалені місця» для адміна: повідомлення «Цього місця не існує» — прибрати місце з мапи, залишити, видалити запис. */
+class AdminReportsViewModel(
+    private val repository: ExistenceReportRepository,
+    private val moderationCountsStore: ModerationCountsStore
+) : ViewModel() {
 
     private val _uiState = MutableStateFlow(AdminReportsUiState())
     val uiState: StateFlow<AdminReportsUiState> = _uiState.asStateFlow()
@@ -45,19 +49,19 @@ class AdminReportsViewModel(private val repository: ExistenceReportRepository) :
             runCatching { repository.adminList(_uiState.value.filter) }
                 .onSuccess { list -> _uiState.update { it.copy(isLoading = false, reports = list) } }
                 .onFailure { e ->
-                    _uiState.update { it.copy(isLoading = false, errorMessage = e.toReportsMessage("Не вдалося завантажити звіти")) }
+                    _uiState.update { it.copy(isLoading = false, errorMessage = e.toReportsMessage("Не вдалося завантажити видалені місця")) }
                 }
         }
     }
 
     fun approve(report: ExistenceReport) =
-        act("Звіт схвалено — місце приховано з мапи", "Не вдалося схвалити звіт") { repository.approve(report.id) }
+        act("Місце прибрано з мапи", "Не вдалося прибрати місце") { repository.approve(report.id) }
 
     fun reject(report: ExistenceReport) =
-        act("Звіт відхилено — місце лишається на мапі", "Не вдалося відхилити звіт") { repository.reject(report.id) }
+        act("Місце лишається на мапі", "Не вдалося відхилити повідомлення") { repository.reject(report.id) }
 
     fun delete(report: ExistenceReport) =
-        act("Звіт видалено", "Не вдалося видалити звіт") { repository.delete(report.id) }
+        act("Запис видалено", "Не вдалося видалити запис") { repository.delete(report.id) }
 
     private fun act(success: String, failure: String, block: suspend () -> Unit) {
         if (_uiState.value.isActing) return
@@ -66,6 +70,7 @@ class AdminReportsViewModel(private val repository: ExistenceReportRepository) :
             runCatching { block() }
                 .onSuccess {
                     _uiState.update { it.copy(isActing = false, message = success) }
+                    moderationCountsStore.refresh()
                     load()
                 }
                 .onFailure { e -> _uiState.update { it.copy(isActing = false, errorMessage = e.toReportsMessage(failure)) } }
@@ -78,7 +83,7 @@ class AdminReportsViewModel(private val repository: ExistenceReportRepository) :
     private fun Throwable.toReportsMessage(fallback: String): String =
         when ((this as? PostgrestRestException)?.code) {
             "PGRST202", "PGRST205" ->
-                "Звіти ще не налаштовані на сервері: застосуйте міграцію 20261101120000_place_existence_reports_and_stats.sql"
+                "«Видалені місця» ще не налаштовані на сервері: застосуйте міграцію 20261101120000_place_existence_reports_and_stats.sql"
             else -> toUserMessage(fallback)
         }
 }

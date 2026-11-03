@@ -55,7 +55,7 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 // ---------------------------------------------------------------------------
-// Вкладка «Звіти»: «Цього місця не існує»
+// Вкладка «Видалені місця»: повідомлення «Цього місця не існує»
 // ---------------------------------------------------------------------------
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -87,7 +87,7 @@ fun AdminReportsTab(snackbarHostState: SnackbarHostState, viewModel: AdminReport
                 CircularProgressIndicator()
             }
             uiState.reports.isEmpty() -> TabMessage(
-                if (uiState.filter == PlaceRequestStatus.PENDING) "Немає звітів, що очікують розгляду" else "Звітів ще немає"
+                if (uiState.filter == PlaceRequestStatus.PENDING) "Немає місць, що очікують видалення" else "Записів про видалені місця ще немає"
             )
             else -> LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp)) {
                 items(uiState.reports, key = { it.id }) { report ->
@@ -123,14 +123,14 @@ fun AdminReportsTab(snackbarHostState: SnackbarHostState, viewModel: AdminReport
 }
 
 private enum class ReportAction(val title: String) {
-    APPROVE("Схвалити звіт?"),
-    REJECT("Відхилити звіт?"),
-    DELETE("Видалити звіт?");
+    APPROVE("Прибрати місце з мапи?"),
+    REJECT("Залишити місце на мапі?"),
+    DELETE("Видалити запис?");
 
     fun description(place: String): String = when (this) {
         APPROVE -> "«$place» буде приховано з мапи для всіх користувачів."
-        REJECT -> "«$place» лишиться на мапі, звіт буде позначено відхиленим."
-        DELETE -> "Звіт буде видалено назавжди. Саме місце не зміниться."
+        REJECT -> "«$place» лишиться на мапі, повідомлення «не існує» буде відхилено."
+        DELETE -> "Запис буде видалено зі списку «Видалені місця» назавжди. Саме місце не зміниться."
     }
 }
 
@@ -149,7 +149,7 @@ private fun ExistenceReportCard(
             }
             val (statusText, statusColor) = when (report.status) {
                 PlaceRequestStatus.PENDING -> "Очікує розгляду" to StatusUnverified
-                PlaceRequestStatus.APPROVED -> "Схвалено — місце приховано" to StatusAccessible
+                PlaceRequestStatus.APPROVED -> "Видалено з мапи" to StatusAccessible
                 PlaceRequestStatus.REJECTED -> "Відхилено" to StatusBarrier
             }
             Text(text = statusText, style = MaterialTheme.typography.labelMedium, color = statusColor, modifier = Modifier.padding(top = 4.dp))
@@ -165,7 +165,7 @@ private fun ExistenceReportCard(
             report.photoUrl?.let { url ->
                 AsyncImage(
                     model = url,
-                    contentDescription = "Фото до звіту",
+                    contentDescription = "Фото до повідомлення",
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -176,11 +176,11 @@ private fun ExistenceReportCard(
             }
             Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 if (report.status == PlaceRequestStatus.PENDING) {
-                    TextButton(onClick = { onAction(ReportAction.APPROVE) }, enabled = !isActing) { Text("Схвалити") }
-                    TextButton(onClick = { onAction(ReportAction.REJECT) }, enabled = !isActing) { Text("Відхилити") }
+                    TextButton(onClick = { onAction(ReportAction.APPROVE) }, enabled = !isActing) { Text("Прибрати з мапи") }
+                    TextButton(onClick = { onAction(ReportAction.REJECT) }, enabled = !isActing) { Text("Залишити") }
                 }
                 TextButton(onClick = { onAction(ReportAction.DELETE) }, enabled = !isActing) {
-                    Text("Видалити звіт", color = MaterialTheme.colorScheme.error)
+                    Text("Видалити запис", color = MaterialTheme.colorScheme.error)
                 }
             }
         }
@@ -230,8 +230,8 @@ fun AdminStatsTab(viewModel: AdminStatsViewModel = koinViewModel()) {
                         "   з них схвалено" to stats.requestsApproved.toString(),
                         "   з них відхилено" to stats.requestsRejected.toString(),
                         "Нові відгуки" to stats.newReviews.toString(),
-                        "Звіти «місце не існує»" to stats.existenceReportsTotal.toString(),
-                        "   з них схвалено" to stats.existenceReportsApproved.toString()
+                        "Повідомлення «місце не існує»" to stats.existenceReportsTotal.toString(),
+                        "   з них видалено з мапи" to stats.existenceReportsApproved.toString()
                     )
                     rows.forEachIndexed { index, (label, value) ->
                         Row(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {

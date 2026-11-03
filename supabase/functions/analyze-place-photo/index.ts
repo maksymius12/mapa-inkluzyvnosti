@@ -12,8 +12,11 @@
 //      (або Dashboard → Edge Functions → Create → вставити цей код). «Enforce JWT Verification» лишити
 //      увімкненим; функція додатково перевіряє, що викликав саме авторизований користувач, а не анонім.
 //
-// Відповідь: {"isPlacePhoto": true | false, "title": "...", "suggestions": ["..."],
-//              "status": "accessible" | "partial" | "barrier"}.
+// Відповідь: {"isPlacePhoto": true | false, "title": "...", "summary": "...", "suggestions": ["..."],
+//              "status": "accessible" | "partial" | "barrier",
+//              "criteria": {"ramp": {"verdict": "yes" | "no" | "not_visible", "reason": "..."}, ... (7 критеріїв)}}.
+// Критерій, якого не видно на фото, модель має чесно позначити not_visible, а не вгадувати.
+// status ніколи не буде кращим, ніж випливає з критеріїв «ні» (сервер знижує його сам).
 // isPlacePhoto = false — на фото не реальне місце (мем, скриншот, картинка з інтернету, селфі тощо):
 // застосунок таке фото не зберігає.
 // SUPABASE_URL і SUPABASE_ANON_KEY Supabase підставляє автоматично.
@@ -26,16 +29,39 @@ const APP_TITLE = "Mapa Inkluzyvnosti";
 
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const STATUSES = ["accessible", "partial", "barrier"];
+const VERDICTS = ["yes", "no", "not_visible"];
+
+// Ті самі 7 критеріїв, що й у перевірці застосунку (таблиця checks). Перші три — вхід: якщо хоч один «ні»,
+// місце недоступне без сторонньої допомоги.
+const CRITERIA: Record<string, string> = {
+  ramp: "пандус або вхід без сходинок (рівний чи пологий підхід до дверей)",
+  door_width: "ширина дверей щонайменше 80 см (проїде крісло колісне)",
+  threshold: "немає порогів і перепадів висоти на вході понад 2 см",
+  elevator: "ліфт або підйомник, якщо є поверхи вище чи нижче входу",
+  toilet: "доступний туалет (просторий, з поручнями)",
+  tactile: "тактильні позначки: рифлена плитка, контрастні смуги на сходах, шрифт Брайля",
+  staff_assistance: "кнопка виклику персоналу чи табличка про допомогу персоналу",
+};
+const ENTRANCE = ["ramp", "door_width", "threshold"];
 
 const PROMPT =
-  "Спершу визнач, чи це справжня фотографія реального місця (будівля, вхід, приміщення, вулиця), " +
-  "зроблена на камеру. Якщо це мем, скриншот, малюнок, картинка з написами чи шаблон з інтернету, " +
-  "селфі або щось, що не стосується місця, — постав isPlacePhoto = false і в заголовку коротко поясни чому. " +
-  "Інакше isPlacePhoto = true і проаналізуй фото входу до будівлі на предмет доступності для людей з інвалідністю " +
-  "(сходи, пандус, поріг, ширина дверей, поручні, покриття). Дай короткий заголовок головної проблеми " +
-  "(до 8 слів), 2–4 конкретні пропозиції українською і статус: accessible — бар'єрів не видно, " +
-  "partial — є перешкоди, але вхід можливий, barrier — без сторонньої допомоги не потрапити. " +
-  "Якщо на фото не видно входу чи будівлі, так і напиши в заголовку і постав partial.";
+  "Ти перевіряєш доступність місця для людей з інвалідністю за фото.\n" +
+  "1) Спершу визнач, чи це справжня фотографія реального місця (будівля, вхід, приміщення, вулиця), зроблена " +
+  "на камеру. Мем, скриншот, малюнок, картинка з написами чи шаблон з інтернету, селфі або щось, що не стосується " +
+  "місця, — isPlacePhoto = false, у title коротко поясни чому, критерії — not_visible.\n" +
+  "2) Інакше isPlacePhoto = true. Для КОЖНОГО з 7 критеріїв дай verdict і коротку причину (reason, до 15 слів, " +
+  "українською, що саме видно на фото):\n" +
+  Object.entries(CRITERIA).map(([key, text]) => `- ${key}: ${text}`).join("\n") + "\n" +
+  "verdict: yes — на фото чітко видно, що вимогу виконано; no — чітко видно, що не виконано (наприклад, сходи " +
+  "без пандуса, високий поріг, вузькі двері); not_visible — цього на фото не видно або не можна визначити напевно. " +
+  "НЕ вгадуй: якщо сумніваєшся, став not_visible. Туалет, ліфт, тактильні позначки й кнопку виклику на фото входу " +
+  "зазвичай не видно — тоді not_visible.\n" +
+  "3) summary — 2–3 речення українською: що видно на фото з погляду доступності (сходи, пандус, поручні, ширина " +
+  "дверей, поріг, покриття, освітлення).\n" +
+  "4) title — головна проблема до 8 слів (або «Бар'єрів на вході не видно»). suggestions — 2–4 конкретні " +
+  "пропозиції, як покращити доступність.\n" +
+  "5) status: barrier — хоч один із ramp, door_width, threshold має verdict no; partial — є інші перешкоди або " +
+  "вхід видно не повністю; accessible — лише якщо вхід добре видно і бар'єрів немає.";
 
 // Structured outputs (OpenAI json_schema, strict): модель гарантовано повертає саме цей JSON.
 const RESPONSE_FORMAT = {
@@ -48,10 +74,25 @@ const RESPONSE_FORMAT = {
       properties: {
         isPlacePhoto: { type: "boolean" },
         title: { type: "string" },
+        summary: { type: "string" },
         suggestions: { type: "array", items: { type: "string" } },
         status: { type: "string", enum: STATUSES },
+        criteria: {
+          type: "object",
+          properties: Object.fromEntries(Object.keys(CRITERIA).map((key) => [key, {
+            type: "object",
+            properties: {
+              verdict: { type: "string", enum: VERDICTS },
+              reason: { type: "string" },
+            },
+            required: ["verdict", "reason"],
+            additionalProperties: false,
+          }])),
+          required: Object.keys(CRITERIA),
+          additionalProperties: false,
+        },
       },
-      required: ["isPlacePhoto", "title", "suggestions", "status"],
+      required: ["isPlacePhoto", "title", "summary", "suggestions", "status", "criteria"],
       additionalProperties: false,
     },
   },
@@ -121,8 +162,8 @@ Deno.serve(async (req) => {
           ],
         }],
         response_format: RESPONSE_FORMAT,
-        temperature: 0.2,
-        max_tokens: 500,
+        temperature: 0.1,
+        max_tokens: 1200,
       }),
     });
     const data = await aiRes.json().catch(() => null);
@@ -141,11 +182,24 @@ Deno.serve(async (req) => {
     if (typeof parsed.isPlacePhoto !== "boolean" || typeof parsed.title !== "string" || !STATUSES.includes(parsed.status)) {
       return json({ error: "unexpected model output" }, 502);
     }
+    const criteria: Record<string, { verdict: string; reason: string }> = {};
+    for (const key of Object.keys(CRITERIA)) {
+      const c = parsed.criteria?.[key];
+      const verdict = VERDICTS.includes(c?.verdict) ? c.verdict : "not_visible";
+      criteria[key] = { verdict, reason: typeof c?.reason === "string" ? c.reason.trim().slice(0, 160) : "" };
+    }
+    // ШІ може лише знизити оцінку: статус не кращий, ніж випливає з критеріїв «ні».
+    const severity = (s: string) => STATUSES.indexOf(s);
+    let status = parsed.status as string;
+    if (ENTRANCE.some((k) => criteria[k].verdict === "no")) status = "barrier";
+    else if (Object.values(criteria).some((c) => c.verdict === "no") && severity(status) < severity("partial")) status = "partial";
     return json({
       isPlacePhoto: parsed.isPlacePhoto,
       title: parsed.title.trim().slice(0, 120),
+      summary: typeof parsed.summary === "string" ? parsed.summary.trim().slice(0, 600) : "",
       suggestions,
-      status: parsed.status,
+      status,
+      criteria,
     });
   } catch (e) {
     console.error("analyze-place-photo", e);

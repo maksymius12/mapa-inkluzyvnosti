@@ -7,8 +7,6 @@ import com.academy.mapainkluzyvnosti.data.model.UserAgeGroup
 import com.academy.mapainkluzyvnosti.data.repository.AuthRepository
 import com.academy.mapainkluzyvnosti.data.repository.CheckRepository
 import com.academy.mapainkluzyvnosti.data.repository.ProfileStatus
-import com.academy.mapainkluzyvnosti.data.repository.PlaceRepository
-import com.academy.mapainkluzyvnosti.domain.usecase.ComputeAccessStatus
 import com.academy.mapainkluzyvnosti.ui.components.QuickCheckState
 import com.academy.mapainkluzyvnosti.ui.state.CurrentUserStore
 import com.academy.mapainkluzyvnosti.ui.state.DemoModeStore
@@ -34,7 +32,6 @@ data class QuickCheckUiState(
 class QuickCheckViewModel(
     private val placeId: String,
     private val checkRepository: CheckRepository,
-    private val placeRepository: PlaceRepository,
     private val authRepository: AuthRepository,
     private val currentUserStore: CurrentUserStore,
     private val demoModeStore: DemoModeStore
@@ -69,12 +66,6 @@ class QuickCheckViewModel(
             runCatching {
                 checkRepository.submitCheck(placeId, userId, checkResult, form.comment.ifBlank { null })
             }.onSuccess {
-                // Запасний шлях для бази без тригера checks_after_insert_apply. З тригером — повторює те саме;
-                // помилки тут лише логуються, бо перевірку вже збережено.
-                val computedStatus = ComputeAccessStatus(checkResult)
-                val latestPhoto = runCatching { placeRepository.getLatestPhoto(placeId) }.getOrNull()
-                val finalStatus = ComputeAccessStatus.combineWithAiStatus(computedStatus, latestPhoto?.aiSuggestedStatus)
-                placeRepository.applyCheckToPlaceFallback(placeId, finalStatus, checkResult.accessibleParking)
                 // Бали учня нараховує сервер — підтягуємо оновлений профіль, щоб «Профіль» показав їх одразу.
                 if (currentUserStore.user.value?.ageGroup == UserAgeGroup.STUDENT) {
                     (runCatching { authRepository.loadProfileStatus() }.getOrNull() as? ProfileStatus.Ready)

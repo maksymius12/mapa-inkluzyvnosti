@@ -1,9 +1,9 @@
 package com.academy.mapainkluzyvnosti.di
 
+import com.academy.mapainkluzyvnosti.data.local.LocationProvider
 import com.academy.mapainkluzyvnosti.data.local.NetworkMonitor
 import com.academy.mapainkluzyvnosti.data.remote.NominatimApi
 import com.academy.mapainkluzyvnosti.data.remote.OsrmApi
-import com.academy.mapainkluzyvnosti.data.remote.OverpassApi
 import com.academy.mapainkluzyvnosti.data.remote.createMapaSupabaseClient
 import com.academy.mapainkluzyvnosti.data.remote.createOsmHttpClient
 import com.academy.mapainkluzyvnosti.data.repository.AuthRepository
@@ -12,12 +12,14 @@ import com.academy.mapainkluzyvnosti.data.repository.FavoriteRepository
 import com.academy.mapainkluzyvnosti.data.repository.PlaceRepository
 import com.academy.mapainkluzyvnosti.data.repository.AdminRepository
 import com.academy.mapainkluzyvnosti.data.repository.ExistenceReportRepository
+import com.academy.mapainkluzyvnosti.data.repository.NameSuggestionRepository
+import com.academy.mapainkluzyvnosti.data.repository.NewsRepository
+import com.academy.mapainkluzyvnosti.ui.screens.news.NewsViewModel
 import com.academy.mapainkluzyvnosti.data.repository.PlaceRequestRepository
 import com.academy.mapainkluzyvnosti.data.repository.ReviewRepository
 import com.academy.mapainkluzyvnosti.data.repository.SosRepository
 import com.academy.mapainkluzyvnosti.data.repository.UserPlaceRepository
 import com.academy.mapainkluzyvnosti.domain.usecase.BuildRoute
-import com.academy.mapainkluzyvnosti.domain.usecase.ImportOsmPlaces
 import com.academy.mapainkluzyvnosti.ui.screens.favorites.FavoritesViewModel
 import com.academy.mapainkluzyvnosti.ui.screens.filters.FiltersViewModel
 import com.academy.mapainkluzyvnosti.ui.screens.login.LoginViewModel
@@ -45,6 +47,9 @@ import com.academy.mapainkluzyvnosti.ui.state.CurrentUserStore
 import com.academy.mapainkluzyvnosti.ui.state.DemoModeStore
 import com.academy.mapainkluzyvnosti.ui.state.FavoriteRoutesStore
 import com.academy.mapainkluzyvnosti.ui.state.MapFilterStore
+import com.academy.mapainkluzyvnosti.ui.state.ModerationCountsStore
+import com.academy.mapainkluzyvnosti.ui.state.SosController
+import com.academy.mapainkluzyvnosti.notifications.SosAlertWatcher
 import com.academy.mapainkluzyvnosti.ui.state.SettingsStore
 import com.academy.mapainkluzyvnosti.ui.state.ThemeStore
 import com.academy.mapainkluzyvnosti.ui.state.SessionSync
@@ -64,9 +69,9 @@ val networkModule = module {
     single { createMapaSupabaseClient() }
     single { createOsmHttpClient() }
     single { NominatimApi(get()) }
-    single { OverpassApi(get()) }
     single { OsrmApi(get()) }
     single { NetworkMonitor(get()) }
+    single { LocationProvider(get()) }
 }
 
 val repositoryModule = module {
@@ -80,10 +85,11 @@ val repositoryModule = module {
     single { ReviewRepository(get()) }
     single { AdminRepository(get()) }
     single { ExistenceReportRepository(get()) }
+    single { NameSuggestionRepository(get()) }
+    single { NewsRepository(get()) }
 }
 
 val useCaseModule = module {
-    factory { ImportOsmPlaces(get(), get(), get()) }
     factory { BuildRoute(get()) }
 }
 
@@ -100,6 +106,9 @@ val stateModule = module {
     single { TutorialPreferences(get()) }
     single { TutorialCoordinator(get(), get(), get(), get()) }
     single { SessionSync(get(), get(), get()) }
+    single { ModerationCountsStore(get(), get(), get(), get(), get(named(APP_SCOPE))) }
+    single { SosController(get(), get(), get(), get(), get(), get(), get(named(APP_SCOPE))) }
+    single { SosAlertWatcher(get(), get(), get(), get(), get(), get(), get(named(APP_SCOPE))) }
 }
 
 val viewModelModule = module {
@@ -111,21 +120,22 @@ val viewModelModule = module {
     viewModel { RoleSetupViewModel(get(), get()) }
     viewModel { MapViewModel(get(), get(), get(), get(), get()) }
     viewModel { AddPlaceViewModel(get(), get(), get(), get(), get()) }
-    viewModel { PlaceRequestsViewModel(get(), get()) }
+    viewModel { PlaceRequestsViewModel(get(), get(), get(), get()) }
     viewModel { AdminUsersViewModel(get(), get()) }
-    viewModel { AdminReportsViewModel(get()) }
+    viewModel { AdminReportsViewModel(get(), get()) }
     viewModel { AdminStatsViewModel(get()) }
     viewModel { SearchViewModel(get()) }
     viewModel { FiltersViewModel(get()) }
-    viewModel { (placeId: String) -> PlaceDetailViewModel(placeId, get(), get(), get(), get(), get(), get(), get()) }
-    viewModel { (placeId: String) -> QuickCheckViewModel(placeId, get(), get(), get(), get(), get()) }
-    viewModel { (placeId: String) -> PhotoUploadViewModel(placeId, get(), get(), get()) }
+    viewModel { (placeId: String) -> PlaceDetailViewModel(placeId, get(), get(), get(), get(), get(), get(), get(), get(), get()) }
+    viewModel { (placeId: String) -> QuickCheckViewModel(placeId, get(), get(), get(), get()) }
+    viewModel { (placeId: String) -> PhotoUploadViewModel(placeId, get(), get(), get(), get()) }
     viewModel { (placeId: String) -> RouteViewModel(get(), get(), get(), get(), placeId) }
     viewModel { FavoritesViewModel(get(), get(), get(), get()) }
-    viewModel { ProfileViewModel(get(), get(), get()) }
+    viewModel { ProfileViewModel(get(), get(), get(), get()) }
     viewModel { SettingsViewModel(get(), get(), get(), get(), get()) }
     viewModel { NotificationsViewModel(get()) }
-    viewModel { SosRequestViewModel(get(), get(), get(), get(), get(named(APP_SCOPE))) }
+    viewModel { NewsViewModel(get(), get(), get()) }
+    viewModel { SosRequestViewModel(get(), get(), get()) }
 }
 
 val appModules = listOf(networkModule, repositoryModule, useCaseModule, stateModule, viewModelModule)

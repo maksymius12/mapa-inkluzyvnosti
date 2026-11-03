@@ -30,6 +30,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -54,7 +55,12 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.ui.platform.LocalContext
 import com.academy.mapainkluzyvnosti.data.local.NetworkMonitor
+import com.academy.mapainkluzyvnosti.ui.state.SosController
+import com.academy.mapainkluzyvnosti.ui.state.SosPhase
 import com.academy.mapainkluzyvnosti.ui.theme.AccentPrimary
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
@@ -74,7 +80,11 @@ private const val MIN_CHECK_MS = 600L
 @Composable
 fun NetworkAwareContent(content: @Composable () -> Unit) {
     val monitor = koinInject<NetworkMonitor>()
+    val sosController = koinInject<SosController>()
     val online by monitor.isOnline.collectAsState()
+    val sosState by sosController.state.collectAsState()
+    // Поки SOS надсилається чи чекає мережі, людина має бачити його стан і 112, а не загальну заглушку.
+    val sosActive = sosState.phase == SosPhase.SENDING || sosState.phase == SosPhase.SENT || sosState.phase == SosPhase.QUEUED
     var showOffline by remember { mutableStateOf(false) }
     var isChecking by remember { mutableStateOf(false) }
     var stillOffline by remember { mutableStateOf(false) }
@@ -94,11 +104,14 @@ fun NetworkAwareContent(content: @Composable () -> Unit) {
 
     Box(modifier = Modifier.fillMaxSize()) {
         // Поки накладка видима, TalkBack не ходить по вмісту під нею.
-        Box(modifier = Modifier.fillMaxSize().then(if (showOffline) Modifier.clearAndSetSemantics { } else Modifier)) {
+        val overlay = showOffline && !sosActive
+        Box(modifier = Modifier.fillMaxSize().then(if (overlay) Modifier.clearAndSetSemantics { } else Modifier)) {
             content()
         }
-        AnimatedVisibility(visible = showOffline, enter = fadeIn(), exit = fadeOut()) {
+        AnimatedVisibility(visible = overlay, enter = fadeIn(), exit = fadeOut()) {
             OfflineScreen(
+                // SOS без мережі не блокується: запит зберігається й піде, щойно з'явиться зв'язок.
+                onSos = sosController::trigger,
                 isChecking = isChecking,
                 stillOffline = stillOffline,
                 onRetry = {
@@ -125,7 +138,13 @@ fun NetworkAwareContent(content: @Composable () -> Unit) {
 }
 
 @Composable
-fun OfflineScreen(isChecking: Boolean, stillOffline: Boolean, onRetry: () -> Unit, modifier: Modifier = Modifier) {
+fun OfflineScreen(
+    isChecking: Boolean,
+    stillOffline: Boolean,
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier,
+    onSos: (() -> Unit)? = null
+) {
     val hazeState = rememberHazeState()
     val reducedMotion = rememberReducedMotion()
     val errorColor = MaterialTheme.colorScheme.error
@@ -219,6 +238,24 @@ fun OfflineScreen(isChecking: Boolean, stillOffline: Boolean, onRetry: () -> Uni
                     .padding(top = 24.dp)
                     .semantics { if (isChecking) contentDescription = "Перевіряємо підключення" }
             )
+
+            if (onSos != null) {
+                SosHelpButton(
+                    onHoldComplete = onSos,
+                    diameter = 88.dp,
+                    caption = "SOS: утримуйте — надішлемо, щойно буде зв'язок",
+                    modifier = Modifier.padding(top = 32.dp)
+                )
+                val context = LocalContext.current
+                TextButton(
+                    onClick = {
+                        context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:112")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    },
+                    modifier = Modifier.padding(top = 8.dp)
+                ) {
+                    Text("Екстрена допомога: подзвонити 112", color = errorColor, fontWeight = FontWeight.Bold)
+                }
+            }
         }
     }
 }

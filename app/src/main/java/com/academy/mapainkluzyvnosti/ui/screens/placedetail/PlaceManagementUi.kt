@@ -81,6 +81,65 @@ fun EditPlaceSheet(
     }
 }
 
+/** «Запропонувати зміну назви»: нова назва + необов'язковий коментар; іде в чергу на розгляд. */
+@Composable
+fun SuggestRenameDialog(
+    currentName: String,
+    isSending: Boolean,
+    error: String?,
+    onSubmit: (String, String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var name by rememberSaveable { mutableStateOf(currentName) }
+    var comment by rememberSaveable { mutableStateOf("") }
+    val trimmed = name.trim()
+    val valid = trimmed.length in 3..80 && !trimmed.equals(currentName.trim(), ignoreCase = true)
+
+    AlertDialog(
+        onDismissRequest = { if (!isSending) onDismiss() },
+        title = { Text("Запропонувати зміну назви") },
+        text = {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                Text(
+                    text = "Назву змінять після перевірки волонтером, учнем чи адміністратором.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it.take(80) },
+                    label = { Text("Нова назва") },
+                    singleLine = true,
+                    enabled = !isSending,
+                    isError = trimmed.isNotEmpty() && trimmed.length < 3,
+                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp)
+                )
+                OutlinedTextField(
+                    value = comment,
+                    onValueChange = { comment = it.take(500) },
+                    label = { Text("Коментар (необов'язково)") },
+                    enabled = !isSending,
+                    minLines = 2,
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                )
+                if (error != null) {
+                    Text(
+                        text = error,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onSubmit(name, comment) }, enabled = valid && !isSending) {
+                Text(if (isSending) "Надсилаємо…" else "Надіслати")
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss, enabled = !isSending) { Text("Скасувати") } }
+    )
+}
+
 @Composable
 fun DeletePlaceDialog(placeName: String, isDeleting: Boolean, onConfirm: () -> Unit, onDismiss: () -> Unit) {
     AlertDialog(

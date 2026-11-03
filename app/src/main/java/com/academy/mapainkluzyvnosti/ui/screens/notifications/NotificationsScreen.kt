@@ -26,7 +26,8 @@ import com.academy.mapainkluzyvnosti.data.model.SosRequest
 import com.academy.mapainkluzyvnosti.ui.components.IconBadge
 import com.academy.mapainkluzyvnosti.ui.components.MapaCard
 import com.academy.mapainkluzyvnosti.ui.components.ScreenHeader
-import com.academy.mapainkluzyvnosti.ui.components.label
+import com.academy.mapainkluzyvnosti.ui.components.locationLabel
+import com.academy.mapainkluzyvnosti.ui.components.titleOrDefault
 import com.academy.mapainkluzyvnosti.ui.theme.StatusPartial
 import org.koin.compose.viewmodel.koinViewModel
 import java.time.OffsetDateTime
@@ -71,7 +72,13 @@ private fun SosNotificationCard(request: SosRequest) {
         Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.Top) {
             IconBadge(color = StatusPartial, icon = Icons.Filled.PriorityHigh)
             Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
-                Text(text = request.problemType.label(), style = MaterialTheme.typography.titleSmall)
+                Text(text = request.problemType.titleOrDefault(), style = MaterialTheme.typography.titleSmall)
+                Text(
+                    text = request.locationLabel(),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 2.dp)
+                )
                 request.comment?.takeIf { it.isNotBlank() }?.let {
                     Text(
                         text = it,

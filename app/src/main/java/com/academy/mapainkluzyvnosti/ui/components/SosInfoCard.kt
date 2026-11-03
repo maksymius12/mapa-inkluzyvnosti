@@ -28,11 +28,18 @@ fun SosInfoCard(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Filled.PriorityHigh, contentDescription = null, tint = StatusPartial)
                 Text(
-                    text = sos.problemType.label(),
+                    text = sos.problemType.titleOrDefault(),
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.padding(start = 8.dp)
                 )
             }
+            // Наскільки вірити позиції: «Локація з мережі, ±300 м», «Остання відома 7 хв тому»…
+            Text(
+                text = sos.locationLabel(),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp)
+            )
             sos.comment?.takeIf { it.isNotBlank() }?.let { comment ->
                 Text(
                     text = comment,

@@ -5,6 +5,7 @@ import com.academy.mapainkluzyvnosti.data.local.SavedRoutesStorage
 import com.academy.mapainkluzyvnosti.data.local.SettingsPreferences
 import com.academy.mapainkluzyvnosti.di.appModules
 import com.academy.mapainkluzyvnosti.notifications.AppNotifications
+import com.academy.mapainkluzyvnosti.notifications.SosAlertWatcher
 import com.academy.mapainkluzyvnosti.ui.state.SessionSync
 import com.academy.mapainkluzyvnosti.work.RouteCheckScheduler
 import org.koin.android.ext.koin.androidContext
@@ -25,6 +26,7 @@ class MapaApplication : Application() {
         GlobalContext.get().get<SessionSync>().start()
         MapLibre.getInstance(this)
         AppNotifications.createChannels(this)
+        GlobalContext.get().get<SosAlertWatcher>().start()
         val routeNotificationsEnabled = SettingsPreferences.load(this).routeNotificationsEnabled
         if (routeNotificationsEnabled && SavedRoutesStorage.load(this).isNotEmpty()) {
             RouteCheckScheduler.scheduleDaily(this)

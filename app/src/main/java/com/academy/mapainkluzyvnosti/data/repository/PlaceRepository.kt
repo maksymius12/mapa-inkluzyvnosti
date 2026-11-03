@@ -1,6 +1,6 @@
 package com.academy.mapainkluzyvnosti.data.repository
 
-import com.academy.mapainkluzyvnosti.data.model.AccessStatus
+import com.academy.mapainkluzyvnosti.data.model.OpeningHours
 import com.academy.mapainkluzyvnosti.data.model.Place
 import com.academy.mapainkluzyvnosti.data.remote.SupabaseErrorLog
 import com.academy.mapainkluzyvnosti.data.remote.dto.AnalyzePlacePhotoRequest
@@ -9,7 +9,6 @@ import com.academy.mapainkluzyvnosti.data.remote.dto.CheckDto
 import com.academy.mapainkluzyvnosti.data.remote.dto.toDomainCheckResult
 import com.academy.mapainkluzyvnosti.data.remote.dto.PlacePhotoDto
 import com.academy.mapainkluzyvnosti.data.remote.dto.PlaceReadDto
-import com.academy.mapainkluzyvnosti.data.remote.dto.PlaceWriteDto
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.functions.functions
 import io.github.jan.supabase.postgrest.postgrest
@@ -20,17 +19,8 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import java.util.UUID
 
-/** Результат додавання фото місця. */
-sealed interface PhotoUploadResult {
-    /** Фото збережено разом із результатом ШІ-аналізу. */
-    data class Analyzed(val photo: PlacePhotoDto) : PhotoUploadResult
-
-    /** Фото збережено, але ШІ-аналіз не вдався (мережа чи помилка функції). */
-    data class AnalysisFailed(val photo: PlacePhotoDto) : PhotoUploadResult
-
-    /** ШІ вважає, що на фото не реальне місце — фото не збережено. */
-    data class Rejected(val reason: String) : PhotoUploadResult
-}
+/** Завантажений у бакет файл фото (ще без рядка в place_photos). */
+data class UploadedPhoto(val path: String, val url: String)
 
 class PlaceRepository(private val client: SupabaseClient) {
 
@@ -74,6 +64,22 @@ class PlaceRepository(private val client: SupabaseClient) {
         return dto.toDomain(latestCheck)
     }
 
+    /** Графік роботи — лише волонтер / учень / адмін (RPC set_place_hours перевіряє роль). null — прибрати. */
+    suspend fun setOpeningHours(placeId: String, hours: OpeningHours?) {
+        try {
+            client.postgrest.rpc(
+                "set_place_hours",
+                buildJsonObject {
+                    put("p_place_id", placeId)
+                    put("p_hours", hours?.toJson() ?: kotlinx.serialization.json.JsonNull)
+                }
+            )
+        } catch (e: Exception) {
+            SupabaseErrorLog.log("POST /rest/v1/rpc/set_place_hours", e, mapOf("p_place_id" to placeId))
+            throw e
+        }
+    }
+
     suspend fun placesNearby(lat: Double, lng: Double, radiusMeters: Double): List<Place> {
         val result = client.postgrest.rpc(
             "places_nearby",
@@ -104,37 +110,8 @@ class PlaceRepository(private val client: SupabaseClient) {
             }
             .decodeSingleOrNull<CheckDto>()
 
-    suspend fun importOsmPlaces(places: List<PlaceWriteDto>) {
-        if (places.isEmpty()) return
-        client.postgrest.from("places").upsert(places)
-    }
-
-    /**
-     * Запасний шлях для бази без тригера checks_after_insert_apply: статус і паркування з клієнта.
-     * Помилки лише логуються — сама перевірка вже збережена, а з тригером сервер робить це сам.
-     */
-    suspend fun applyCheckToPlaceFallback(placeId: String, status: AccessStatus, hasAccessibleParking: Boolean) {
-        try {
-            client.postgrest.from("places").update({
-                set("status", status)
-                set("has_accessible_parking", hasAccessibleParking)
-            }) { filter { eq("id", placeId) } }
-        } catch (e: Exception) {
-            SupabaseErrorLog.log(
-                "PATCH /rest/v1/places (status after check)",
-                e,
-                mapOf("id" to placeId, "status" to status, "has_accessible_parking" to hasAccessibleParking)
-            )
-        }
-    }
-
-    /**
-     * Завантажує фото й віддає його на ШІ-аналіз. Тека — id автора: так файл відхиленого фото
-     * можна видалити (storage-політика photos_storage_delete_own).
-     *  - ШІ вважає, що на фото не місце → файл видаляємо, рядок не створюємо: [PhotoUploadResult.Rejected];
-     *  - аналіз не вдався (мережа, 4xx/5xx) → фото все одно зберігаємо: [PhotoUploadResult.AnalysisFailed].
-     */
-    suspend fun uploadPlacePhoto(placeId: String, userId: String, bytes: ByteArray, fileExtension: String): PhotoUploadResult {
+    /** Файл у бакеті place-photos: тека — id автора, щоб відхилене чи скасоване фото можна було видалити. */
+    suspend fun uploadPhotoFile(placeId: String, userId: String, bytes: ByteArray, fileExtension: String): UploadedPhoto {
         val path = "$userId/$placeId/${UUID.randomUUID()}.$fileExtension"
         try {
             photoBucket.upload(path, bytes)
@@ -142,38 +119,41 @@ class PlaceRepository(private val client: SupabaseClient) {
             SupabaseErrorLog.log("POST /storage/v1/object/place-photos", e, mapOf("path" to path))
             throw e
         }
-        val publicUrl = photoBucket.publicUrl(path)
+        return UploadedPhoto(path, photoBucket.publicUrl(path))
+    }
 
-        val analysis = runCatching { analyzePhoto(publicUrl) }
-        analysis.getOrNull()?.takeIf { !it.isPlacePhoto }?.let { rejected ->
-            runCatching { photoBucket.delete(path) }
-                .onFailure { e -> SupabaseErrorLog.log("DELETE /storage/v1/object/place-photos", e, mapOf("path" to path)) }
-            return PhotoUploadResult.Rejected(rejected.title)
-        }
+    /** Мем / скасовано: файл прибираємо, рядок у place_photos не створюємо. Помилку лише логуємо. */
+    suspend fun deletePhotoFile(path: String) {
+        runCatching { photoBucket.delete(path) }
+            .onFailure { e -> SupabaseErrorLog.log("DELETE /storage/v1/object/place-photos", e, mapOf("path" to path)) }
+    }
 
-        val result = analysis.getOrNull()
+    /**
+     * Рядок фото. [applyStatus] = false («Лише завантажити фото») — статус ШІ не зберігаємо: інакше тригер
+     * checks_after_insert_apply врахував би його при наступній перевірці, а дані місця не мали змінюватися.
+     */
+    suspend fun savePhoto(placeId: String, userId: String, url: String, analysis: AnalyzePlacePhotoResponse?, applyStatus: Boolean): PlacePhotoDto {
         val photo = PlacePhotoDto(
             placeId = placeId,
             userId = userId,
-            url = publicUrl,
-            aiTitle = result?.title,
-            aiSuggestions = result?.suggestions.orEmpty(),
-            aiSuggestedStatus = result?.status
+            url = url,
+            aiTitle = analysis?.title,
+            aiSuggestions = analysis?.suggestions,
+            aiSuggestedStatus = if (applyStatus) analysis?.status else null
         )
-        val saved = try {
+        return try {
             client.postgrest.from("place_photos").insert(photo) { select() }.decodeSingle<PlacePhotoDto>()
         } catch (e: Exception) {
             SupabaseErrorLog.log("POST /rest/v1/place_photos", e, mapOf("place_id" to placeId))
             throw e
         }
-        return if (result != null) PhotoUploadResult.Analyzed(saved) else PhotoUploadResult.AnalysisFailed(saved)
     }
 
     /**
      * AI-аналіз фото через Edge Function analyze-place-photo (OpenRouter на сервері; ключа в застосунку немає).
-     * Помилку кидає далі — uploadPlacePhoto зберігає фото без підказок і каже про це користувачу.
+     * Помилку кидає далі — екран пропонує завантажити фото без аналізу.
      */
-    private suspend fun analyzePhoto(photoUrl: String): AnalyzePlacePhotoResponse {
+    suspend fun analyzePhoto(photoUrl: String): AnalyzePlacePhotoResponse {
         return try {
             client.functions.invoke(
                 function = "analyze-place-photo",
@@ -200,6 +180,7 @@ class PlaceRepository(private val client: SupabaseClient) {
         reviewCount = reviewCount,
         hasAccessibleParking = hasAccessibleParking,
         createdBy = createdBy,
-        attribution = attribution
+        attribution = attribution,
+        openingHours = OpeningHours.parse(openingHours)
     )
 }

@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.academy.mapainkluzyvnosti.data.model.AppUser
+import com.academy.mapainkluzyvnosti.data.model.OpeningHours
 import com.academy.mapainkluzyvnosti.data.model.Place
 import com.academy.mapainkluzyvnosti.data.model.PlaceReview
 import com.academy.mapainkluzyvnosti.data.remote.dto.PlacePhotoDto
@@ -12,6 +13,8 @@ import com.academy.mapainkluzyvnosti.data.remote.toSaveErrorMessage
 import com.academy.mapainkluzyvnosti.data.remote.toUserMessage
 import com.academy.mapainkluzyvnosti.data.repository.ExistenceReportRepository
 import com.academy.mapainkluzyvnosti.data.repository.FavoriteRepository
+import com.academy.mapainkluzyvnosti.data.repository.NameSuggestionRepository
+import com.academy.mapainkluzyvnosti.ui.state.ModerationCountsStore
 import com.academy.mapainkluzyvnosti.data.repository.PlaceReportReason
 import com.academy.mapainkluzyvnosti.data.repository.PlaceRepository
 import com.academy.mapainkluzyvnosti.data.repository.ReviewRepository
@@ -52,6 +55,14 @@ data class PlaceDetailUiState(
     val showReviewForm: Boolean = false,
     val isSavingReview: Boolean = false,
     val reviewError: String? = null,
+    /** Діалог «Запропонувати зміну назви» (мешканець і всі, хто не може змінити місце сам). */
+    val showRenameForm: Boolean = false,
+    val isSendingRename: Boolean = false,
+    val renameError: String? = null,
+    /** Редактор графіка роботи. */
+    val showHoursEditor: Boolean = false,
+    val isSavingHours: Boolean = false,
+    val hoursError: String? = null,
     /** Форма «Цього місця не існує». */
     val showExistenceForm: Boolean = false,
     val existencePhoto: Bitmap? = null,
@@ -68,15 +79,25 @@ data class PlaceDetailUiState(
     val isOwnPlace: Boolean
         get() = place?.isUserAdded == true && currentUser != null && place.createdBy == currentUser.id
 
-    /** Адмін має full доступ: редагує й видаляє будь-яке місце, не лише власне. */
+    /**
+     * Змінити чи видалити: волонтер / учень — власне додане місце, адмін — будь-яке. Мешканець — жодне,
+     * навіть своє (сервер: update_place / delete_own_place повертають MP403).
+     */
     val canManagePlace: Boolean
-        get() = isOwnPlace || currentUser?.isAdmin == true
+        get() = currentUser?.isAdmin == true || (isOwnPlace && currentUser?.isReviewer == true)
+
+    /** Хто не може змінити місце сам, пропонує нову назву — її розгляне волонтер / учень / адмін. */
+    val canSuggestRename: Boolean
+        get() = place != null && currentUser != null && !isDemoMode && !canManagePlace
 
     /** Поскаржитися можна на чуже додане користувачем місце (гостю — діалог гейту). */
     val canReport: Boolean get() = place?.isUserAdded == true && !isOwnPlace
 
     /** «Цього місця не існує» — волонтер, учень чи адмін (як і рецензування заявок; RLS на сервері так само). */
     val canReportNonExistence: Boolean get() = currentUser?.isReviewer == true && !isDemoMode
+
+    /** Графік роботи додають і змінюють волонтер, учень і адмін (сервер: set_place_hours). Мешканець лише бачить. */
+    val canEditHours: Boolean get() = currentUser?.isReviewer == true && !isDemoMode
 
     /** Залишати відгуки можуть лише залогінені (не гість). */
     val canWriteReview: Boolean get() = currentUser != null && !isDemoMode
@@ -92,6 +113,8 @@ class PlaceDetailViewModel(
     private val userPlaceRepository: UserPlaceRepository,
     private val reviewRepository: ReviewRepository,
     private val existenceReportRepository: ExistenceReportRepository,
+    private val nameSuggestionRepository: NameSuggestionRepository,
+    private val moderationCountsStore: ModerationCountsStore,
     private val currentUserStore: CurrentUserStore,
     private val demoModeStore: DemoModeStore
 ) : ViewModel() {
@@ -257,6 +280,70 @@ class PlaceDetailViewModel(
         }
     }
 
+    // ---- Графік роботи ----
+
+    fun openHoursEditor() {
+        if (_uiState.value.canEditHours) _uiState.update { it.copy(showHoursEditor = true, hoursError = null) }
+    }
+
+    fun dismissHoursEditor() = _uiState.update { it.copy(showHoursEditor = false, hoursError = null) }
+
+    fun saveHours(hours: OpeningHours?) {
+        if (_uiState.value.isSavingHours || !_uiState.value.canEditHours) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSavingHours = true, hoursError = null) }
+            runCatching { placeRepository.setOpeningHours(placeId, hours) }
+                .onSuccess {
+                    _uiState.update {
+                        it.copy(
+                            isSavingHours = false,
+                            showHoursEditor = false,
+                            place = it.place?.copy(openingHours = hours),
+                            message = if (hours == null) "Графік прибрано" else "Графік збережено"
+                        )
+                    }
+                }
+                .onFailure { e ->
+                    _uiState.update { it.copy(isSavingHours = false, hoursError = e.toUserMessage("Не вдалося зберегти графік")) }
+                }
+        }
+    }
+
+    // ---- Пропозиція зміни назви ----
+
+    fun openRenameForm() {
+        if (_uiState.value.canSuggestRename) _uiState.update { it.copy(showRenameForm = true, renameError = null) }
+    }
+
+    fun dismissRenameForm() = _uiState.update { it.copy(showRenameForm = false, renameError = null) }
+
+    fun submitRename(newName: String, comment: String) {
+        val state = _uiState.value
+        if (state.isSendingRename || !state.canSuggestRename) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSendingRename = true, renameError = null) }
+            runCatching { nameSuggestionRepository.suggest(placeId, newName.trim(), comment.trim().ifBlank { null }) }
+                .onSuccess {
+                    moderationCountsStore.refresh()
+                    _uiState.update {
+                        it.copy(
+                            isSendingRename = false,
+                            showRenameForm = false,
+                            message = "Пропозицію надіслано — її розгляне волонтер"
+                        )
+                    }
+                }
+                .onFailure { e ->
+                    val error = if ((e as? PostgrestRestException)?.code == "23505") {
+                        "Ви вже запропонували назву для цього місця — вона очікує розгляду"
+                    } else {
+                        e.toUserMessage("Не вдалося надіслати пропозицію. Спробуйте ще раз")
+                    }
+                    _uiState.update { it.copy(isSendingRename = false, renameError = error) }
+                }
+        }
+    }
+
     // ---- «Цього місця не існує» ----
 
     private var existenceJpeg: ByteArray? = null
@@ -299,15 +386,15 @@ class PlaceDetailViewModel(
                             isSendingExistence = false,
                             showExistenceForm = false,
                             existencePhoto = null,
-                            message = "Дякуємо! Звіт передано адміністратору"
+                            message = "Дякуємо! Повідомлення передано адміністратору"
                         )
                     }
                 }
                 .onFailure { e ->
                     val error = if ((e as? PostgrestRestException)?.code == "23505") {
-                        "Ви вже повідомили про це місце — звіт очікує розгляду"
+                        "Ви вже повідомили про це місце — повідомлення очікує розгляду"
                     } else {
-                        e.toUserMessage("Не вдалося надіслати звіт. Спробуйте ще раз")
+                        e.toUserMessage("Не вдалося надіслати повідомлення. Спробуйте ще раз")
                     }
                     _uiState.update { it.copy(isSendingExistence = false, existenceError = error) }
                 }

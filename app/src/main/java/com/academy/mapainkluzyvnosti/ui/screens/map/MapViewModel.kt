@@ -6,7 +6,6 @@ import com.academy.mapainkluzyvnosti.data.model.AccessibilityType
 import com.academy.mapainkluzyvnosti.data.model.GeoPoint
 import com.academy.mapainkluzyvnosti.data.model.Place
 import com.academy.mapainkluzyvnosti.data.model.SosRequest
-import com.academy.mapainkluzyvnosti.data.model.UserPurposeRole
 import com.academy.mapainkluzyvnosti.data.remote.NominatimApi
 import com.academy.mapainkluzyvnosti.data.remote.toUserMessage
 import com.academy.mapainkluzyvnosti.data.repository.PlaceRepository
@@ -54,8 +53,9 @@ class MapViewModel(
 
     val filterSelection: StateFlow<FilterSelection> = filterStore.selection
 
+    /** SOS бачать і закривають волонтер, учень і адмін (як і RLS sos_requests). */
     val isVolunteer: StateFlow<Boolean> = currentUserStore.user
-        .map { it?.purposeRole == UserPurposeRole.VOLUNTEER }
+        .map { it?.isReviewer == true }
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     // Межі району — для затемнення мапи поза ним і обмеження камери.
@@ -138,9 +138,8 @@ class MapViewModel(
 
     fun resolveSelectedSos() {
         val sos = _uiState.value.selectedSos ?: return
-        val resolverId = currentUserStore.user.value?.id ?: return
         viewModelScope.launch {
-            runCatching { sosRepository.resolve(sos.id, resolverId) }
+            runCatching { sosRepository.resolve(sos.id) }
                 .onSuccess {
                     _uiState.update { it.copy(selectedSosId = null) }
                     loadSosRequests()

@@ -39,6 +39,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -49,11 +50,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import coil3.compose.AsyncImage
 import com.academy.mapainkluzyvnosti.BuildConfig
 import com.academy.mapainkluzyvnosti.data.model.UserAgeGroup
 import com.academy.mapainkluzyvnosti.data.model.UserPurposeRole
+import com.academy.mapainkluzyvnosti.ui.components.CountBadge
 import com.academy.mapainkluzyvnosti.ui.components.MapaCard
 import com.academy.mapainkluzyvnosti.ui.components.SecondaryButton
 import com.academy.mapainkluzyvnosti.ui.screens.settings.ageGroupLabel
@@ -76,6 +81,16 @@ fun ProfileScreen(
     viewModel: ProfileViewModel = koinViewModel()
 ) {
     val user by viewModel.currentUser.collectAsState()
+    val counts by viewModel.moderationCounts.collectAsState()
+    // Повернулись на екран — свіжі лічильники «чекає розгляду».
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) viewModel.refreshCounts()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     val isDemoMode by viewModel.isDemoMode.collectAsState()
     var showAbout by remember { mutableStateOf(false) }
     var showHelp by remember { mutableStateOf(false) }
@@ -146,11 +161,13 @@ fun ProfileScreen(
                 MenuRow(
                     Icons.AutoMirrored.Outlined.Assignment,
                     if (user?.isReviewer == true) "Заявки на розгляд" else "Мої заявки",
-                    onOpenPlaceRequests
+                    onOpenPlaceRequests,
+                    badge = counts.requests
                 )
             }
             if (!isDemoMode && user?.isAdmin == true) {
-                MenuRow(Icons.Outlined.AdminPanelSettings, "Адмін-панель", onOpenAdmin)
+                // Бейдж — нові «Видалені місця» (повідомлення «Цього місця не існує»), вони в адмін-панелі.
+                MenuRow(Icons.Outlined.AdminPanelSettings, "Адмін-панель · Видалені місця", onOpenAdmin, badge = counts.existenceReports)
             }
             MenuRow(Icons.Outlined.Settings, "Налаштування", onOpenSettings)
             MenuRow(Icons.Outlined.HelpOutline, "Допомога", { showHelp = true })
@@ -252,7 +269,7 @@ private fun Avatar(name: String, imageUrl: String?, isGuest: Boolean) {
 }
 
 @Composable
-private fun MenuRow(icon: ImageVector, title: String, onClick: () -> Unit, showDivider: Boolean = true) {
+private fun MenuRow(icon: ImageVector, title: String, onClick: () -> Unit, showDivider: Boolean = true, badge: Int = 0) {
     Column {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -267,6 +284,7 @@ private fun MenuRow(icon: ImageVector, title: String, onClick: () -> Unit, showD
                 style = MaterialTheme.typography.bodyLarge,
                 modifier = Modifier.weight(1f).padding(horizontal = 16.dp)
             )
+            CountBadge(badge, modifier = Modifier.padding(end = 8.dp))
             Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         if (showDivider) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)

@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.academy.mapainkluzyvnosti.data.model.AppUser
 import com.academy.mapainkluzyvnosti.data.repository.AuthRepository
+import com.academy.mapainkluzyvnosti.data.repository.ModerationCounts
+import com.academy.mapainkluzyvnosti.ui.state.ModerationCountsStore
 import com.academy.mapainkluzyvnosti.ui.state.CurrentUserStore
 import com.academy.mapainkluzyvnosti.ui.state.DemoModeStore
 import kotlinx.coroutines.flow.StateFlow
@@ -14,11 +16,15 @@ private const val DEFAULT_NAME = "Користувач"
 class ProfileViewModel(
     private val authRepository: AuthRepository,
     private val currentUserStore: CurrentUserStore,
-    private val demoModeStore: DemoModeStore
+    private val demoModeStore: DemoModeStore,
+    private val moderationCountsStore: ModerationCountsStore
 ) : ViewModel() {
 
     val currentUser: StateFlow<AppUser?> = currentUserStore.user
     val isDemoMode: StateFlow<Boolean> = demoModeStore.isDemoMode
+    val moderationCounts: StateFlow<ModerationCounts> = moderationCountsStore.counts
+
+    fun refreshCounts() = moderationCountsStore.refresh()
 
     /** Ім'я з реального профілю; для профілів із типовою назвою — ім'я акаунта (Google/пошта). */
     fun displayName(user: AppUser?): String {

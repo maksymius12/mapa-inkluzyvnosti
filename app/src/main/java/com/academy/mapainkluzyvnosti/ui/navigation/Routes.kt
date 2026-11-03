@@ -22,7 +22,8 @@ object Routes {
     const val MAP = "map"
     const val SEARCH = "search"
     const val FILTERS = "filters"
-    const val CATEGORIES = "categories"
+    /** Стрічка оголошень (замість колишньої вкладки «Категорії» — фільтр категорій є на мапі, у «Фільтрах»). */
+    const val NEWS = "news"
     const val PROFILE = "profile"
     const val SETTINGS = "settings"
     const val NOTIFICATIONS = "notifications"
@@ -49,5 +50,5 @@ object Routes {
     fun photoUpload(placeId: String) = "photo_upload/$placeId"
 
     /** Топ-рівневі вкладки нижньої навігації (маршрути-шаблони, як їх віддає NavDestination). */
-    val bottomNavRoutes = setOf(MAP, CATEGORIES, FAVORITES, PROFILE)
+    val bottomNavRoutes = setOf(MAP, NEWS, FAVORITES, PROFILE)
 }

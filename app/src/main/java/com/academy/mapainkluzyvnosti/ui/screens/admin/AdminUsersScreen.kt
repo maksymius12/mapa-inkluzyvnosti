@@ -48,13 +48,16 @@ import com.academy.mapainkluzyvnosti.data.repository.AdminUser
 import com.academy.mapainkluzyvnosti.ui.components.MapaCard
 import com.academy.mapainkluzyvnosti.ui.screens.settings.ageGroupLabel
 import com.academy.mapainkluzyvnosti.ui.screens.settings.purposeRoleLabel
+import com.academy.mapainkluzyvnosti.ui.components.CountBadge
+import com.academy.mapainkluzyvnosti.ui.state.ModerationCountsStore
+import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 
-private val AdminTabs = listOf("Користувачі", "Звіти", "Аналітика")
+private val AdminTabs = listOf("Користувачі", "Видалені місця", "Аналітика")
 
 /**
  * Адмін-панель з трьома вкладками: користувачі (пошук, роль «Користувач»/«Адмін» з підтвердженням,
- * мета користування), звіти «Цього місця не існує» і аналітика за місяць.
+ * мета користування), «Видалені місця» (повідомлення «Цього місця не існує») і аналітика за місяць.
  * Сервер окремо перевіряє права (RPC admin_*).
  */
 @Composable
@@ -63,6 +66,7 @@ fun AdminUsersScreen(onBack: () -> Unit, viewModel: AdminUsersViewModel = koinVi
     val snackbarHostState = remember { SnackbarHostState() }
     var roleChange by remember { mutableStateOf<Pair<AdminUser, UserRole>?>(null) }
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    val counts by koinInject<ModerationCountsStore>().counts.collectAsState()
 
     LaunchedEffect(uiState.message, uiState.errorMessage) {
         (uiState.message ?: uiState.errorMessage)?.let {
@@ -88,7 +92,16 @@ fun AdminUsersScreen(onBack: () -> Unit, viewModel: AdminUsersViewModel = koinVi
         } else {
             TabRow(selectedTabIndex = selectedTab, modifier = Modifier.padding(bottom = 12.dp)) {
                 AdminTabs.forEachIndexed { index, title ->
-                    Tab(selected = selectedTab == index, onClick = { selectedTab = index }, text = { Text(title) })
+                    Tab(
+                        selected = selectedTab == index,
+                        onClick = { selectedTab = index },
+                        text = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(title)
+                                if (index == 1) CountBadge(counts.existenceReports, modifier = Modifier.padding(start = 6.dp))
+                            }
+                        }
+                    )
                 }
             }
             when (selectedTab) {

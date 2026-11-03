@@ -5,13 +5,11 @@ import com.academy.mapainkluzyvnosti.data.model.PLACE_SOURCE_USER
 import com.academy.mapainkluzyvnosti.data.model.Place
 import com.academy.mapainkluzyvnosti.data.model.PlaceCategory
 import com.academy.mapainkluzyvnosti.data.remote.dto.CreatedPlaceDto
-import com.academy.mapainkluzyvnosti.data.remote.dto.CreatedPlaceIdDto
 import com.academy.mapainkluzyvnosti.data.remote.dto.PlaceReportInsertDto
 import com.academy.mapainkluzyvnosti.data.remote.dto.PlaceReportReadDto
 import com.academy.mapainkluzyvnosti.data.remote.dto.UserPlaceInsertDto
 import com.academy.mapainkluzyvnosti.data.remote.dto.wktPoint
 import com.academy.mapainkluzyvnosti.domain.usecase.PlaceInputRules
-import com.academy.mapainkluzyvnosti.data.remote.NothingUpdatedException
 import com.academy.mapainkluzyvnosti.data.remote.SupabaseErrorLog
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
@@ -95,9 +93,8 @@ class UserPlaceRepository(
             "store_user_matches_session=${storeUserId == createdBy}"
 
     /**
-     * Зміна назви/категорії/адреси власного місця. RLS і тригер places_before_update дозволяють це лише
-     * автору; якщо PATCH не зачепив жодного рядка (немає прав, місце приховане чи видалене) —
-     * NothingUpdatedException, а не тихе «збережено».
+     * Зміна назви/категорії/адреси — лише через RPC update_place: пряме UPDATE таблиці places клієнтам
+     * закрито. Сервер дозволяє це волонтеру/учню для власного місця й адміну для будь-якого; мешканцю — MP403.
      */
     suspend fun updatePlace(placeId: String, name: String, category: PlaceCategory, address: String) {
         val fields = mapOf(
@@ -106,22 +103,18 @@ class UserPlaceRepository(
             "category" to category,
             "address_length" to PlaceInputRules.normalize(address).length
         )
-        val updated = try {
-            client.postgrest.from("places").update({
-                set("name", PlaceInputRules.normalize(name))
-                set("category", category)
-                set("address", PlaceInputRules.normalize(address))
-            }) {
-                select(Columns.list("id"))
-                filter { eq("id", placeId) }
-            }.decodeList<CreatedPlaceIdDto>()
+        try {
+            client.postgrest.rpc(
+                "update_place",
+                buildJsonObject {
+                    put("p_place_id", placeId)
+                    put("p_name", PlaceInputRules.normalize(name))
+                    put("p_category", category.name.lowercase())
+                    put("p_address", PlaceInputRules.normalize(address))
+                }
+            )
         } catch (e: Exception) {
-            SupabaseErrorLog.log("PATCH /rest/v1/places", e, fields)
-            throw e
-        }
-        if (updated.isEmpty()) {
-            val e = NothingUpdatedException("PATCH /rest/v1/places")
-            SupabaseErrorLog.log("PATCH /rest/v1/places", e, fields)
+            SupabaseErrorLog.log("POST /rest/v1/rpc/update_place", e, fields)
             throw e
         }
     }

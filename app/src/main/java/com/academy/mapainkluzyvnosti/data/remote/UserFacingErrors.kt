@@ -31,8 +31,11 @@ fun Throwable.toUserMessage(fallback: String): String = when (this) {
     is PostgrestRestException -> when (code) {
         "MP400" -> error.takeIf { it.isNotBlank() } ?: "Перевірте правильність заповнення полів"
         "MP401" -> "Увійдіть, щоб виконати цю дію"
-        "MP403", "42501" -> "Недостатньо прав для цієї дії"
-        "MP404" -> "Місце за межами району"
+        // Власні тексти RPC (наприклад, «Мешканці не можуть змінювати місця…») — зрозуміліші за загальні.
+        "MP403" -> error.takeIf { it.isNotBlank() } ?: "Недостатньо прав для цієї дії"
+        "42501" -> "Недостатньо прав для цієї дії"
+        "MP404" -> error.takeIf { it.isNotBlank() } ?: "Місце за межами району"
+        "MP409" -> error.takeIf { it.isNotBlank() } ?: fallback
         "MP429" -> "Можна додати не більше 10 місць за добу. Спробуйте завтра"
         "23505" -> "Ви вже поскаржилися на це місце"
         "PGRST301", "PGRST302" -> SESSION_EXPIRED

@@ -1,8 +1,5 @@
 package com.academy.mapainkluzyvnosti.ui.screens.route
 
-import android.Manifest
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -57,8 +54,9 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.core.content.ContextCompat
-import com.academy.mapainkluzyvnosti.data.local.DeviceLocation
+import com.academy.mapainkluzyvnosti.data.local.LocationProvider
+import com.academy.mapainkluzyvnosti.data.local.LocationResult
+import com.academy.mapainkluzyvnosti.ui.components.rememberLocationPermissionRequest
 import com.academy.mapainkluzyvnosti.data.model.GeoPoint
 import com.academy.mapainkluzyvnosti.data.model.Place
 import com.academy.mapainkluzyvnosti.domain.usecase.FindBarriersOnRoute
@@ -81,6 +79,7 @@ import com.academy.mapainkluzyvnosti.ui.maplibre.setDistrictBoundary
 import com.academy.mapainkluzyvnosti.ui.theme.AccentPrimary
 import com.academy.mapainkluzyvnosti.ui.theme.StatusBarrier
 import kotlinx.coroutines.launch
+import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
 import org.maplibre.android.camera.CameraPosition
@@ -128,6 +127,7 @@ fun RouteScreen(
     val context = LocalContext.current
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
+    val locationProvider = koinInject<LocationProvider>()
 
     val mapView = rememberMapLibreMapView()
     var maplibreMap by remember { mutableStateOf<MapLibreMap?>(null) }
@@ -136,22 +136,25 @@ fun RouteScreen(
 
     // Головний флоу: «Будувати маршрут» з картки місця має одразу знати «звідки» (GPS)
     // і «куди» (обране місце) — без ручного вводу двох адрес.
+    // Свіжа правдоподібна позиція, а якщо GPS глушать чи підмінюють — остання надійна.
     fun locateUser() {
         viewModel.onLocatingStarted()
         scope.launch {
-            val point = DeviceLocation.getCurrent(context)
+            val point = when (val result = locationProvider.current()) {
+                is LocationResult.Reliable -> result.fix.point
+                is LocationResult.Unreliable -> result.lastReliable?.point
+                is LocationResult.Unavailable -> result.lastReliable?.point
+            }
             if (point != null) viewModel.setCurrentLocation(point.lat, point.lng) else viewModel.onLocationDenied()
         }
     }
 
-    val locationPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+    val requestLocationPermission = rememberLocationPermissionRequest { granted ->
         if (granted) locateUser() else viewModel.onLocationDenied()
     }
 
     fun requestLocation() {
-        val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
-            android.content.pm.PackageManager.PERMISSION_GRANTED
-        if (granted) locateUser() else locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+        if (locationProvider.hasPermission()) locateUser() else requestLocationPermission()
     }
 
     LaunchedEffect(Unit) { requestLocation() }
@@ -308,7 +311,7 @@ fun RouteScreen(
             }
 
             SosHelpButton(
-                onClick = onOpenSos,
+                onHoldComplete = onOpenSos,
                 modifier = Modifier.align(Alignment.BottomStart).padding(16.dp)
             )
         }

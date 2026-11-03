@@ -27,23 +27,9 @@ data class PlaceReadDto(
     /** Автор користувацького місця (source = "user"); null — OSM або старі записи. */
     @SerialName("created_by") val createdBy: String? = null,
     /** Підпис джерела для імпортованих відкритих даних (source = "open_data"). */
-    val attribution: String? = null
-)
-
-/**
- * Запис у `places`: `location` передається як WKT-текст ("POINT(lng lat)"),
- * Postgres неявно приводить його до geography. lat/lng — generated, у insert не йдуть.
- */
-@Serializable
-data class PlaceWriteDto(
-    val id: String,
-    val name: String,
-    val address: String,
-    val category: PlaceCategory,
-    val location: String,
-    val status: AccessStatus,
-    val source: String,
-    @SerialName("verified_note") val verifiedNote: String = ""
+    val attribution: String? = null,
+    /** Графік роботи (jsonb) — див. OpeningHours. */
+    @SerialName("opening_hours") val openingHours: kotlinx.serialization.json.JsonElement? = null
 )
 
 fun wktPoint(lat: Double, lng: Double): String = "POINT($lng $lat)"

@@ -4,12 +4,13 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.Newspaper
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavDestination.Companion.hierarchy
@@ -22,7 +23,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.academy.mapainkluzyvnosti.ui.components.BottomNavEntry
 import com.academy.mapainkluzyvnosti.ui.components.MapaBottomNavBar
-import com.academy.mapainkluzyvnosti.ui.screens.categories.CategoriesScreen
+import com.academy.mapainkluzyvnosti.ui.screens.news.NewsScreen
 import com.academy.mapainkluzyvnosti.ui.screens.favorites.FavoritesScreen
 import com.academy.mapainkluzyvnosti.ui.screens.filters.FiltersScreen
 import com.academy.mapainkluzyvnosti.ui.screens.login.LoginScreen
@@ -45,6 +46,11 @@ import com.academy.mapainkluzyvnosti.ui.screens.sos.SosRequestScreen
 import com.academy.mapainkluzyvnosti.ui.screens.welcome.WelcomeScreen
 import com.academy.mapainkluzyvnosti.ui.screens.tutorial.TutorialScreen
 import com.academy.mapainkluzyvnosti.ui.state.AppStartup
+import com.academy.mapainkluzyvnosti.ui.state.ModerationCountsStore
+import com.academy.mapainkluzyvnosti.ui.state.SosController
+import com.academy.mapainkluzyvnosti.ui.state.SosPhase
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import com.academy.mapainkluzyvnosti.ui.state.TutorialCoordinator
 import com.academy.mapainkluzyvnosti.ui.state.TutorialMode
 import androidx.compose.material3.AlertDialog
@@ -69,6 +75,26 @@ fun MapaNavHost(startRoute: String) {
     fun goToLogin() = navController.navigate(Routes.LOGIN) { popUpTo(0) { inclusive = true } }
 
     val koinTutorial = koinInject<TutorialCoordinator>()
+    val sosController = koinInject<SosController>()
+    val moderationCounts by koinInject<ModerationCountsStore>().counts.collectAsState()
+
+    /** SOS утримано: запит створюється й надсилається одразу, екран лише показує його стан. */
+    fun sendSos() {
+        sosController.trigger()
+        navController.navigate(Routes.SOS_REQUEST) { launchSingleTop = true }
+    }
+
+    // SOS, надісланий з екрана «Ви не в мережі», або незавершений запит, відновлений після перезапуску, —
+    // одразу показуємо його стан (і 112).
+    LaunchedEffect(Unit) {
+        sosController.state.map { it.phase }.distinctUntilChanged().collect { phase ->
+            if ((phase == SosPhase.SENDING || phase == SosPhase.QUEUED) &&
+                navController.currentDestination?.route != Routes.SOS_REQUEST
+            ) {
+                navController.navigate(Routes.SOS_REQUEST) { launchSingleTop = true }
+            }
+        }
+    }
 
     /** Після входу/реєстрації: мапа стає коренем стеку, екрани входу прибираються. */
     fun goToMapAfterAuth() {
@@ -87,17 +113,17 @@ fun MapaNavHost(startRoute: String) {
                         BottomNavEntry("Мапа", Icons.Filled.Map, selected(Routes.MAP)) {
                             navController.switchTab(Routes.MAP)
                         },
-                        BottomNavEntry("Категорії", Icons.Filled.GridView, selected(Routes.CATEGORIES)) {
-                            navController.switchTab(Routes.CATEGORIES)
+                        BottomNavEntry("Новини", Icons.Filled.Newspaper, selected(Routes.NEWS)) {
+                            navController.switchTab(Routes.NEWS)
                         },
                         BottomNavEntry("Обране", Icons.Filled.Favorite, selected(Routes.FAVORITES)) {
                             navController.switchTab(Routes.favorites())
                         },
-                        BottomNavEntry("Профіль", Icons.Filled.Person, selected(Routes.PROFILE)) {
+                        BottomNavEntry("Профіль", Icons.Filled.Person, selected(Routes.PROFILE), badgeCount = moderationCounts.total) {
                             navController.switchTab(Routes.PROFILE)
                         }
                     ),
-                    onSos = { navController.navigate(Routes.SOS_REQUEST) }
+                    onSos = { sendSos() }
                 )
             }
         }
@@ -251,8 +277,8 @@ fun MapaNavHost(startRoute: String) {
             composable(Routes.FILTERS) {
                 FiltersScreen(onBack = { navController.popBackStack() })
             }
-            composable(Routes.CATEGORIES) {
-                CategoriesScreen(onCategoryChosen = { navController.switchTab(Routes.MAP) })
+            composable(Routes.NEWS) {
+                NewsScreen()
             }
             composable(
                 route = Routes.FAVORITES,
@@ -303,7 +329,7 @@ fun MapaNavHost(startRoute: String) {
                 RouteScreen(
                     destinationPlaceId = placeId,
                     onBack = { navController.popBackStack() },
-                    onOpenSos = { navController.navigate(Routes.SOS_REQUEST) }
+                    onOpenSos = { sendSos() }
                 )
             }
             composable(Routes.SOS_REQUEST) {

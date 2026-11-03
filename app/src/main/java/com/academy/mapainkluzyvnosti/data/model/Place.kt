@@ -18,7 +18,9 @@ data class Place(
     /** Автор місця, доданого користувачем; null — OSM або старі записи. */
     val createdBy: String? = null,
     /** Підпис джерела для місць із відкритих даних (вимога ліцензії CC BY). */
-    val attribution: String? = null
+    val attribution: String? = null,
+    /** Графік роботи; null — не вказано. */
+    val openingHours: OpeningHours? = null
 ) {
     val isUserAdded: Boolean get() = source == PLACE_SOURCE_USER
 

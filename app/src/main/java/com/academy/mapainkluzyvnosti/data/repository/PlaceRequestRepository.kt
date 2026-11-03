@@ -117,6 +117,10 @@ class PlaceRequestRepository(private val client: SupabaseClient) {
         }
     }
 
+    /** Лічильники для бейджів (RPC moderation_counts: мешканцю — нулі). */
+    suspend fun moderationCounts(): ModerationCounts =
+        client.postgrest.rpc("moderation_counts").decodeList<ModerationCounts>().firstOrNull() ?: ModerationCounts()
+
     private fun categoryApiValue(category: PlaceCategory): String = category.name.lowercase()
 
     /**
@@ -140,4 +144,16 @@ class PlaceRequestRepository(private val client: SupabaseClient) {
         rejectReason = rejectReason,
         createdAt = createdAt
     )
+}
+
+/** Записи, що чекають розгляду; [existenceReports] — лише для адміна (звіти «не існує» розглядає адмін). */
+@kotlinx.serialization.Serializable
+data class ModerationCounts(
+    @kotlinx.serialization.SerialName("place_requests") val placeRequests: Int = 0,
+    @kotlinx.serialization.SerialName("name_suggestions") val nameSuggestions: Int = 0,
+    @kotlinx.serialization.SerialName("existence_reports") val existenceReports: Int = 0
+) {
+    /** Бейдж біля «Заявки»: нові місця + пропозиції зміни назви. */
+    val requests: Int get() = placeRequests + nameSuggestions
+    val total: Int get() = requests + existenceReports
 }
