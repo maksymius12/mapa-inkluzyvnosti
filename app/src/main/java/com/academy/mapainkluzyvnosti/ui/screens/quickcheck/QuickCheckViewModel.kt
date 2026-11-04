@@ -6,6 +6,7 @@ import com.academy.mapainkluzyvnosti.data.remote.toSaveErrorMessage
 import com.academy.mapainkluzyvnosti.data.model.UserAgeGroup
 import com.academy.mapainkluzyvnosti.data.repository.AuthRepository
 import com.academy.mapainkluzyvnosti.data.repository.CheckRepository
+import com.academy.mapainkluzyvnosti.data.repository.PlaceRepository
 import com.academy.mapainkluzyvnosti.data.repository.ProfileStatus
 import com.academy.mapainkluzyvnosti.ui.components.QuickCheckState
 import com.academy.mapainkluzyvnosti.ui.state.CurrentUserStore
@@ -32,6 +33,7 @@ data class QuickCheckUiState(
 class QuickCheckViewModel(
     private val placeId: String,
     private val checkRepository: CheckRepository,
+    private val placeRepository: PlaceRepository,
     private val authRepository: AuthRepository,
     private val currentUserStore: CurrentUserStore,
     private val demoModeStore: DemoModeStore
@@ -39,6 +41,16 @@ class QuickCheckViewModel(
 
     private val _uiState = MutableStateFlow(QuickCheckUiState())
     val uiState: StateFlow<QuickCheckUiState> = _uiState.asStateFlow()
+
+    init {
+        // Повторна перевірка починається з останніх збережених значень; нове місце — з «не вибрано».
+        viewModelScope.launch {
+            val latest = runCatching { placeRepository.getPlaceById(placeId)?.checks }.getOrNull() ?: return@launch
+            _uiState.update { state ->
+                if (state.form.values.isEmpty()) state.copy(form = QuickCheckState.from(latest).copy(comment = state.form.comment)) else state
+            }
+        }
+    }
 
     fun onFormChange(form: QuickCheckState) {
         _uiState.update { it.copy(form = form, errorMessage = null) }
@@ -60,9 +72,13 @@ class QuickCheckViewModel(
         }
         if (_uiState.value.isSubmitting) return
         val form = _uiState.value.form
+        val checkResult = form.toCheckResult() ?: run {
+            val missing = form.unanswered.joinToString { it.title }
+            _uiState.update { it.copy(errorMessage = "Оцініть усі 7 критеріїв. Не вибрано: $missing") }
+            return
+        }
         viewModelScope.launch {
             _uiState.update { it.copy(isSubmitting = true, errorMessage = null) }
-            val checkResult = form.toCheckResult()
             runCatching {
                 checkRepository.submitCheck(placeId, userId, checkResult, form.comment.ifBlank { null })
             }.onSuccess {

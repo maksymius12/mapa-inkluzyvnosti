@@ -14,6 +14,7 @@ object AppPreferences {
     private const val KEY_FILTER_CATEGORIES = "filter_categories"
     private const val KEY_FILTER_CATEGORIES_KNOWN = "filter_categories_known"
     private const val KEY_FILTER_TYPES = "filter_types"
+    private const val KEY_LAST_SEEN_WHATS_NEW = "last_seen_whats_new_version"
 
     fun isOnboardingSeen(context: Context): Boolean = prefs(context).getBoolean(KEY_ONBOARDING_SEEN, false)
 
@@ -25,6 +26,14 @@ object AppPreferences {
 
     fun setGuest(context: Context, guest: Boolean) {
         prefs(context).edit().putBoolean(KEY_GUEST, guest).apply()
+    }
+
+    /** versionCode, для якого вже показано (або пропущено) екран «Що нового»; null — ще не записано. */
+    fun lastSeenWhatsNewVersion(context: Context): Int? =
+        prefs(context).takeIf { it.contains(KEY_LAST_SEEN_WHATS_NEW) }?.getInt(KEY_LAST_SEEN_WHATS_NEW, 0)
+
+    fun setLastSeenWhatsNewVersion(context: Context, versionCode: Int) {
+        prefs(context).edit().putInt(KEY_LAST_SEEN_WHATS_NEW, versionCode).apply()
     }
 
     /** null — фільтр ще ніколи не зберігався. */

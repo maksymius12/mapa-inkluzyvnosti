@@ -53,6 +53,8 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import com.academy.mapainkluzyvnosti.ui.state.TutorialCoordinator
 import com.academy.mapainkluzyvnosti.ui.state.TutorialMode
+import com.academy.mapainkluzyvnosti.ui.state.WhatsNewStore
+import com.academy.mapainkluzyvnosti.ui.screens.whatsnew.WhatsNewScreen
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -216,6 +218,9 @@ fun MapaNavHost(startRoute: String) {
                     ?: TutorialMode.FULL
                 TutorialScreen(mode = mode, onFinished = { navController.popBackStack() })
             }
+            composable(Routes.WHATS_NEW) {
+                WhatsNewScreen(onClose = { navController.popBackStack() })
+            }
             composable(Routes.ROLE_SETUP) {
                 RoleSetupScreen(
                     onDone = { goToMapAfterAuth() },
@@ -224,14 +229,20 @@ fun MapaNavHost(startRoute: String) {
             }
             composable(Routes.MAP) {
                 val tutorial = koinInject<TutorialCoordinator>()
+                val whatsNew = koinInject<WhatsNewStore>()
                 val scope = rememberCoroutineScope()
                 var showRolesPrompt by remember { mutableStateOf(false) }
                 // Інструктаж — один раз після першої реєстрації/входу (чи гостьового входу);
                 // інакше — одноразова підказка перевірити підставлені мету й вік.
                 LaunchedEffect(Unit) {
                     val pending = tutorial.pendingTutorial()
+                    val sosActive = sosController.state.value.phase.let { it == SosPhase.SENDING || it == SosPhase.QUEUED }
                     if (pending != null) {
+                        // Інструктаж і так показує застосунок — «Що нового» вже не потрібне.
+                        whatsNew.markSeen()
                         navController.navigate(Routes.tutorial(pending)) { launchSingleTop = true }
+                    } else if (whatsNew.hasPending && !sosActive) {
+                        navController.navigate(Routes.WHATS_NEW) { launchSingleTop = true }
                     } else if (tutorial.shouldPromptRolesReview()) {
                         showRolesPrompt = true
                     }

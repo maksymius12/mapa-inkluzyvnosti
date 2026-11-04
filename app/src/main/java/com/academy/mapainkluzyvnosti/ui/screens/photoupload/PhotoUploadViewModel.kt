@@ -8,6 +8,7 @@ import com.academy.mapainkluzyvnosti.data.remote.toUserMessage
 import com.academy.mapainkluzyvnosti.data.repository.CheckRepository
 import com.academy.mapainkluzyvnosti.data.repository.PlaceRepository
 import com.academy.mapainkluzyvnosti.data.repository.UploadedPhoto
+import com.academy.mapainkluzyvnosti.ui.components.AccessCriterion
 import com.academy.mapainkluzyvnosti.ui.state.CurrentUserStore
 import com.academy.mapainkluzyvnosti.ui.state.DemoModeStore
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -16,32 +17,11 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/** Один із 7 критеріїв: ключ колонки checks і підпис. */
-enum class PhotoCriterion(val key: String, val label: String) {
-    RAMP("ramp", "Пандус / вхід без сходинок"),
-    DOOR_WIDTH("door_width", "Ширина дверей (≥80 см)"),
-    THRESHOLD("threshold", "Немає порогів і перепадів"),
-    ELEVATOR("elevator", "Ліфт (за потреби)"),
-    TOILET("toilet", "Доступний туалет"),
-    TACTILE("tactile", "Тактильні позначки"),
-    STAFF("staff_assistance", "Допомога персоналу");
-
-    fun of(check: CheckResult): Boolean = when (this) {
-        RAMP -> check.ramp
-        DOOR_WIDTH -> check.doorWidth
-        THRESHOLD -> check.threshold
-        ELEVATOR -> check.elevator
-        TOILET -> check.toilet
-        TACTILE -> check.tactile
-        STAFF -> check.staffAssistance
-    }
-}
-
 enum class AiVerdict { YES, NO, NOT_VISIBLE }
 
 /** Пропозиція ШІ по критерію: що він бачить, чому, і яке значення буде після «Замінити дані». */
 data class CriterionProposal(
-    val criterion: PhotoCriterion,
+    val criterion: AccessCriterion,
     val verdict: AiVerdict,
     val reason: String,
     /** Поточне значення з останньої перевірки людиною; null — перевірки ще не було. */
@@ -197,7 +177,7 @@ class PhotoUploadViewModel(
     }
 
     private fun proposals(analysis: AnalyzePlacePhotoResponse): List<CriterionProposal> =
-        PhotoCriterion.entries.map { criterion ->
+        AccessCriterion.entries.map { criterion ->
             val raw = analysis.criteria[criterion.key]
             val verdict = when (raw?.verdict) {
                 "yes" -> AiVerdict.YES
@@ -216,15 +196,15 @@ class PhotoUploadViewModel(
         }
 
     private fun lowered(base: CheckResult, proposals: List<CriterionProposal>): CheckResult {
-        fun value(c: PhotoCriterion) = proposals.firstOrNull { it.criterion == c }?.proposed ?: c.of(base)
+        fun value(c: AccessCriterion) = proposals.firstOrNull { it.criterion == c }?.proposed ?: c.of(base)
         return base.copy(
-            ramp = value(PhotoCriterion.RAMP),
-            doorWidth = value(PhotoCriterion.DOOR_WIDTH),
-            threshold = value(PhotoCriterion.THRESHOLD),
-            elevator = value(PhotoCriterion.ELEVATOR),
-            toilet = value(PhotoCriterion.TOILET),
-            tactile = value(PhotoCriterion.TACTILE),
-            staffAssistance = value(PhotoCriterion.STAFF),
+            ramp = value(AccessCriterion.RAMP),
+            doorWidth = value(AccessCriterion.DOOR_WIDTH),
+            threshold = value(AccessCriterion.THRESHOLD),
+            elevator = value(AccessCriterion.ELEVATOR),
+            toilet = value(AccessCriterion.TOILET),
+            tactile = value(AccessCriterion.TACTILE),
+            staffAssistance = value(AccessCriterion.STAFF),
             checkedAt = null
         )
     }

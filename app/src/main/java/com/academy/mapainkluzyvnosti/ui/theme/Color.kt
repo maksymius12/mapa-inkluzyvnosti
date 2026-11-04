@@ -35,3 +35,8 @@ val LegendParking = Color(0xFFF5B800)
 val LegendElevator = Color(0xFF8B3FD9)
 val LegendStaffHelp = Color(0xFFFF5C8A)
 val LegendNeutral = Color(0xFF7A8AA6)
+
+// Перемикач «Так | Ні» у картці критеріїв (текст на обох — темний, контраст ≥ 6:1 в обох темах)
+val CriterionYes = Color(0xFF4CC38A)
+val CriterionNo = Color(0xFFF26B5B)
+val OnCriterionChoice = Color(0xFF0B1220)

@@ -10,6 +10,8 @@ object Routes {
     const val SIGN_UP = "sign_up"
     /** Один раз після першого входу через Google: мета користування й вікова категорія. */
     const val ROLE_SETUP = "role_setup"
+    /** «Що нового» — один раз після оновлення, поверх мапи (тобто вже після входу чи вибору гостя). */
+    const val WHATS_NEW = "whats_new"
 
     /** Інструктаж «Як користуватися»: FULL — для акаунта, GUEST — скорочений для гостя. */
     const val TUTORIAL_PATTERN = "tutorial?mode={mode}"

@@ -54,6 +54,7 @@ import com.academy.mapainkluzyvnosti.ui.state.SettingsStore
 import com.academy.mapainkluzyvnosti.ui.state.ThemeStore
 import com.academy.mapainkluzyvnosti.ui.state.SessionSync
 import com.academy.mapainkluzyvnosti.ui.state.TutorialCoordinator
+import com.academy.mapainkluzyvnosti.ui.state.WhatsNewStore
 import com.academy.mapainkluzyvnosti.data.local.TutorialPreferences
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -104,6 +105,7 @@ val stateModule = module {
     single { FavoriteRoutesStore(get()) }
     single { ThemeStore() }
     single { TutorialPreferences(get()) }
+    single { WhatsNewStore(get()) }
     single { TutorialCoordinator(get(), get(), get(), get()) }
     single { SessionSync(get(), get(), get()) }
     single { ModerationCountsStore(get(), get(), get(), get(), get(named(APP_SCOPE))) }
@@ -127,7 +129,7 @@ val viewModelModule = module {
     viewModel { SearchViewModel(get()) }
     viewModel { FiltersViewModel(get()) }
     viewModel { (placeId: String) -> PlaceDetailViewModel(placeId, get(), get(), get(), get(), get(), get(), get(), get(), get()) }
-    viewModel { (placeId: String) -> QuickCheckViewModel(placeId, get(), get(), get(), get()) }
+    viewModel { (placeId: String) -> QuickCheckViewModel(placeId, get(), get(), get(), get(), get()) }
     viewModel { (placeId: String) -> PhotoUploadViewModel(placeId, get(), get(), get(), get()) }
     viewModel { (placeId: String) -> RouteViewModel(get(), get(), get(), get(), placeId) }
     viewModel { FavoritesViewModel(get(), get(), get(), get()) }

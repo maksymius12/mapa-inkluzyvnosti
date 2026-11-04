@@ -16,7 +16,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -41,8 +40,9 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.academy.mapainkluzyvnosti.ui.components.CriteriaCheckCard
+import com.academy.mapainkluzyvnosti.ui.components.CriterionNote
 import com.academy.mapainkluzyvnosti.ui.components.DemoGateDialog
-import com.academy.mapainkluzyvnosti.ui.components.MapaCard
 import com.academy.mapainkluzyvnosti.ui.components.PhotoSourceButtons
 import com.academy.mapainkluzyvnosti.ui.components.PrimaryButton
 import com.academy.mapainkluzyvnosti.ui.components.SecondaryButton
@@ -50,8 +50,6 @@ import com.academy.mapainkluzyvnosti.ui.components.color
 import com.academy.mapainkluzyvnosti.ui.components.label
 import com.academy.mapainkluzyvnosti.ui.components.rememberPhotoPicker
 import com.academy.mapainkluzyvnosti.ui.components.toJpegBytes
-import com.academy.mapainkluzyvnosti.ui.theme.StatusAccessible
-import com.academy.mapainkluzyvnosti.ui.theme.StatusBarrier
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
@@ -204,29 +202,15 @@ private fun ReviewSection(
             modifier = Modifier.padding(top = 6.dp)
         )
 
-        Text(text = "Критерії", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 16.dp))
-        MapaCard(modifier = Modifier.fillMaxWidth().padding(top = 6.dp)) {
-            state.proposals.forEachIndexed { index, p ->
-                Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(text = p.criterion.label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-                        val (verdictText, verdictColor) = when (p.verdict) {
-                            AiVerdict.YES -> "Виконано" to StatusAccessible
-                            AiVerdict.NO -> "Не виконано" to StatusBarrier
-                            AiVerdict.NOT_VISIBLE -> "Не видно" to MaterialTheme.colorScheme.onSurfaceVariant
-                        }
-                        Text(text = verdictText, color = verdictColor, style = MaterialTheme.typography.labelLarge)
-                    }
-                    if (p.reason.isNotBlank()) {
-                        Text(text = p.reason, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    criterionChangeNote(p)?.let { note ->
-                        Text(text = note, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 2.dp))
-                    }
-                }
-                if (index < state.proposals.lastIndex) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-            }
-        }
+        // Ті самі перемикачі, що й у швидкій перевірці, — лише для перегляду: значення після «Замінити дані»
+        // (ШІ лише знижує); без перевірки людиною критерії лишаються невибраними.
+        CriteriaCheckCard(
+            title = "Критерії за фото",
+            values = { criterion -> state.proposals.firstOrNull { it.criterion == criterion }?.proposed },
+            onValueChange = null,
+            notes = state.proposals.associate { p -> p.criterion to CriterionNote(aiNote(p), fromAi = true) },
+            modifier = Modifier.padding(top = 16.dp)
+        )
 
         if (analysis.suggestions.isNotEmpty()) {
             Text(text = "Рекомендації", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 12.dp))
@@ -256,10 +240,19 @@ private fun ReviewSection(
     }
 }
 
-/** Що станеться з критерієм після «Замінити дані». */
-private fun criterionChangeNote(p: CriterionProposal): String? = when {
-    p.current == null -> null
-    p.current && p.proposed == false -> "Буде: «Так» → «Ні»"
-    !p.current && p.verdict == AiVerdict.YES -> "Лишиться «Ні»: підвищити може лише перевірка людиною"
-    else -> null
+/** Позначка ШІ під критерієм: вердикт, причина і що станеться після «Замінити дані». */
+private fun aiNote(p: CriterionProposal): String = buildString {
+    append(
+        when (p.verdict) {
+            AiVerdict.YES -> "ШІ: виконано"
+            AiVerdict.NO -> "ШІ: не виконано"
+            AiVerdict.NOT_VISIBLE -> "ШІ: не видно на фото"
+        }
+    )
+    if (p.reason.isNotBlank()) append(" — ").append(p.reason)
+    when {
+        p.current == null -> Unit
+        p.current && p.proposed == false -> append(". Було «Так», стане «Ні»")
+        !p.current && p.verdict == AiVerdict.YES -> append(". Лишиться «Ні»: підвищити може лише перевірка людиною")
+    }
 }
