@@ -16,7 +16,7 @@ class QuickCheckStateTest {
     fun nothingSelectedByDefault() {
         val state = QuickCheckState()
         AccessCriterion.entries.forEach { assertNull(state.value(it)) }
-        assertEquals(AccessCriterion.entries, state.unanswered)
+        assertEquals(AccessCriterion.entries.map { it.def }, state.unanswered)
         assertNull(state.toCheckResult())
     }
 
@@ -56,5 +56,23 @@ class QuickCheckStateTest {
             toilet = true, tactile = false, staffAssistance = true, accessibleParking = true
         )
         assertEquals(check, QuickCheckState.from(check).toCheckResult())
+    }
+
+    @Test
+    fun stopFormNeedsAllNineAnswers() {
+        val partial = QuickCheckState.forStop(null).with(StopCriteria.criteria.first(), true)
+        assertNull(partial.toStopAnswers())
+        assertNull(partial.toCheckResult())
+        assertEquals(8, partial.unanswered.size)
+        val full = StopCriteria.criteria.fold(QuickCheckState.forStop(null)) { s, c -> s.with(c, c.critical) }
+        assertEquals(StopCriteria.criteria.associate { it.key to it.critical }, full.toStopAnswers())
+    }
+
+    @Test
+    fun stopCriteriaCriticalArePlatformHeightAndObstacleFree() {
+        assertEquals(listOf("platform_height", "obstacle_free"), StopCriteria.criteria.filter { it.critical }.map { it.key })
+        assertEquals(9, StopCriteria.criteria.size)
+        assertEquals(StopCriteria, criteriaFor(com.academy.mapainkluzyvnosti.data.model.PlaceCategory.TRANSIT))
+        assertEquals(EntranceCriteria, criteriaFor(com.academy.mapainkluzyvnosti.data.model.PlaceCategory.CAFE))
     }
 }

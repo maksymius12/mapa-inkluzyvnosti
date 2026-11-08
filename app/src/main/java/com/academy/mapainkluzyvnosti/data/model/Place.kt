@@ -20,7 +20,9 @@ data class Place(
     /** Підпис джерела для місць із відкритих даних (вимога ліцензії CC BY). */
     val attribution: String? = null,
     /** Графік роботи; null — не вказано. */
-    val openingHours: OpeningHours? = null
+    val openingHours: OpeningHours? = null,
+    /** Остання перевірка зупинки за 9 критеріями (лише категорія TRANSIT). */
+    val stopCheck: StopCheck? = null
 ) {
     val isUserAdded: Boolean get() = source == PLACE_SOURCE_USER
 
@@ -28,7 +30,7 @@ data class Place(
     val isOpenData: Boolean get() = source == PLACE_SOURCE_OPEN_DATA
 
     /** Додане користувачем місце, яке ще ніхто не перевірив, — на мапі пунктирна мітка категорії. */
-    val awaitsFirstCheck: Boolean get() = isUserAdded && checks == null && status == AccessStatus.UNVERIFIED
+    val awaitsFirstCheck: Boolean get() = isUserAdded && checks == null && stopCheck == null && status == AccessStatus.UNVERIFIED
 }
 
 const val PLACE_SOURCE_USER = "user"

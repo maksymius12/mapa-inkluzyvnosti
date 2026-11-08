@@ -41,6 +41,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.academy.mapainkluzyvnosti.ui.components.CriteriaCheckCard
+import com.academy.mapainkluzyvnosti.ui.components.CriteriaKind
 import com.academy.mapainkluzyvnosti.ui.components.CriterionNote
 import com.academy.mapainkluzyvnosti.ui.components.DemoGateDialog
 import com.academy.mapainkluzyvnosti.ui.components.PhotoSourceButtons
@@ -109,7 +110,12 @@ fun PhotoUploadScreen(
             }
             Text(
                 text = if (uiState.withAi) {
-                    "Сфотографуйте вхід — ШІ опише, що видно, і запропонує значення 7 критеріїв. Ви вирішите, чи застосувати їх."
+                    if (uiState.set.kind == CriteriaKind.STOP) {
+                        "Сфотографуйте зупинку — ШІ оцінить те, що видно на фото (навіс, лави, тактильні смуги, табло, " +
+                            "висоту майданчика, перешкоди). Ви вирішите, чи застосувати це."
+                    } else {
+                        "Сфотографуйте вхід — ШІ опише, що видно, і запропонує значення 7 критеріїв. Ви вирішите, чи застосувати їх."
+                    }
                 } else {
                     "Фото просто завантажиться, без аналізу. Дані місця не зміняться."
                 },
@@ -205,10 +211,11 @@ private fun ReviewSection(
         // Ті самі перемикачі, що й у швидкій перевірці, — лише для перегляду: значення після «Замінити дані»
         // (ШІ лише знижує); без перевірки людиною критерії лишаються невибраними.
         CriteriaCheckCard(
+            set = state.set,
             title = "Критерії за фото",
-            values = { criterion -> state.proposals.firstOrNull { it.criterion == criterion }?.proposed },
+            values = { criterion -> state.proposals.firstOrNull { it.criterion.key == criterion.key }?.proposed },
             onValueChange = null,
-            notes = state.proposals.associate { p -> p.criterion to CriterionNote(aiNote(p), fromAi = true) },
+            notes = state.proposals.associate { p -> p.criterion.key to CriterionNote(aiNote(p), fromAi = true) },
             modifier = Modifier.padding(top = 16.dp)
         )
 

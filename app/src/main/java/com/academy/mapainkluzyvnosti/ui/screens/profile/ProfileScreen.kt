@@ -3,7 +3,6 @@ package com.academy.mapainkluzyvnosti.ui.screens.profile
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -18,17 +17,13 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
-import androidx.compose.material.icons.outlined.Sos
 import androidx.compose.material.icons.automirrored.outlined.Assignment
 import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.AdminPanelSettings
 import androidx.compose.material.icons.outlined.FavoriteBorder
-import androidx.compose.material.icons.outlined.HelpOutline
 import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.NotificationsNone
 import androidx.compose.material.icons.outlined.Route
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.AlertDialog
@@ -63,7 +58,6 @@ import com.academy.mapainkluzyvnosti.ui.components.MapaCard
 import com.academy.mapainkluzyvnosti.ui.components.SecondaryButton
 import com.academy.mapainkluzyvnosti.ui.screens.settings.ageGroupLabel
 import com.academy.mapainkluzyvnosti.ui.screens.settings.purposeRoleLabel
-import com.academy.mapainkluzyvnosti.ui.theme.StatusPartial
 import org.koin.compose.viewmodel.koinViewModel
 
 /** Екран 7: профіль. Аватар, ім'я з реального профілю, список розділів. */
@@ -71,12 +65,11 @@ import org.koin.compose.viewmodel.koinViewModel
 fun ProfileScreen(
     onOpenRoutes: () -> Unit,
     onOpenFavorites: () -> Unit,
-    onOpenNotifications: () -> Unit,
     onOpenSettings: () -> Unit,
-    onOpenHelp: () -> Unit,
     onOpenTutorial: () -> Unit,
     onOpenPlaceRequests: () -> Unit,
     onOpenAdmin: () -> Unit,
+    onOpenPlace: (String) -> Unit,
     onSignedOut: () -> Unit,
     viewModel: ProfileViewModel = koinViewModel()
 ) {
@@ -93,7 +86,6 @@ fun ProfileScreen(
     }
     val isDemoMode by viewModel.isDemoMode.collectAsState()
     var showAbout by remember { mutableStateOf(false) }
-    var showHelp by remember { mutableStateOf(false) }
 
     val name = if (isDemoMode) "Гостьовий перегляд" else viewModel.displayName(user)
     // Мета й вікова категорія — з profiles (або підставлені, поки рядка немає).
@@ -133,7 +125,7 @@ fun ProfileScreen(
 
         if (isDemoMode) {
             Text(
-                text = "Дані доступні лише для перегляду. Увійди через Google, щоб додавати перевірки, фото, обране та SOS.",
+                text = "Дані доступні лише для перегляду. Увійди через Google, щоб додавати перевірки, фото й обране.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 16.dp)
@@ -149,14 +141,21 @@ fun ProfileScreen(
                 }
             }
             if (user?.ageGroup == UserAgeGroup.STUDENT) {
-                GamificationBlock(points = user?.points ?: 0, checksCount = user?.checksCount ?: 0)
+                val contribution by viewModel.contribution.collectAsState()
+                ContributionCard(
+                    points = user?.points ?: 0,
+                    checksCount = user?.checksCount ?: 0,
+                    state = contribution,
+                    onExpand = viewModel::loadContribution,
+                    onOpenPlace = onOpenPlace,
+                    modifier = Modifier.padding(top = 16.dp)
+                )
             }
         }
 
         Column(modifier = Modifier.padding(top = 24.dp)) {
             MenuRow(Icons.Outlined.Route, "Мої маршрути", onOpenRoutes)
             MenuRow(Icons.Outlined.FavoriteBorder, "Обране", onOpenFavorites)
-            MenuRow(Icons.Outlined.NotificationsNone, "Повідомлення", onOpenNotifications)
             if (!isDemoMode) {
                 MenuRow(
                     Icons.AutoMirrored.Outlined.Assignment,
@@ -170,7 +169,8 @@ fun ProfileScreen(
                 MenuRow(Icons.Outlined.AdminPanelSettings, "Адмін-панель · Видалені місця", onOpenAdmin, badge = counts.existenceReports)
             }
             MenuRow(Icons.Outlined.Settings, "Налаштування", onOpenSettings)
-            MenuRow(Icons.Outlined.HelpOutline, "Допомога", { showHelp = true })
+            // Без SOS у «Допомозі» лишався один пункт — тож інструктаж відкривається одразу.
+            MenuRow(Icons.AutoMirrored.Outlined.MenuBook, "Як користуватися", onOpenTutorial)
             MenuRow(Icons.Outlined.Info, "Про застосунок", { showAbout = true }, showDivider = false)
         }
 
@@ -179,26 +179,6 @@ fun ProfileScreen(
             icon = Icons.AutoMirrored.Filled.Logout,
             onClick = { viewModel.signOut(onSignedOut) },
             modifier = Modifier.padding(top = 24.dp)
-        )
-    }
-
-    if (showHelp) {
-        AlertDialog(
-            onDismissRequest = { showHelp = false },
-            title = { Text("Допомога") },
-            text = {
-                Column {
-                    MenuRow(Icons.AutoMirrored.Outlined.MenuBook, "Як користуватися", {
-                        showHelp = false
-                        onOpenTutorial()
-                    })
-                    MenuRow(Icons.Outlined.Sos, "Запит допомоги волонтерам", {
-                        showHelp = false
-                        onOpenHelp()
-                    }, showDivider = false)
-                }
-            },
-            confirmButton = { TextButton(onClick = { showHelp = false }) { Text("Закрити") } }
         )
     }
 
@@ -291,30 +271,3 @@ private fun MenuRow(icon: ImageVector, title: String, onClick: () -> Unit, showD
     }
 }
 
-@Composable
-private fun GamificationBlock(points: Int, checksCount: Int) {
-    MapaCard(modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(text = "Твій внесок", style = MaterialTheme.typography.titleMedium)
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                StatColumn(value = points.toString(), label = "Балів")
-                StatColumn(value = checksCount.toString(), label = "Перевірок")
-                StatColumn(value = badgeCount(checksCount).toString(), label = "Значків")
-            }
-        }
-    }
-}
-
-@Composable
-private fun StatColumn(value: String, label: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Icon(imageVector = Icons.Filled.EmojiEvents, contentDescription = null, tint = StatusPartial)
-        Text(text = value, style = MaterialTheme.typography.titleLarge)
-        Text(text = label, style = MaterialTheme.typography.labelMedium)
-    }
-}
-
-private fun badgeCount(checksCount: Int): Int = checksCount / 5

@@ -27,6 +27,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.academy.mapainkluzyvnosti.ui.components.DemoGateDialog
@@ -102,7 +103,11 @@ fun QuickCheckScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp)
         ) {
-            QuickCheckForm(state = uiState.form, onStateChange = viewModel::onFormChange)
+            if (uiState.isLoadingPlace) {
+                CircularProgressIndicator(modifier = Modifier.padding(24.dp).align(Alignment.CenterHorizontally))
+            } else {
+                QuickCheckForm(state = uiState.form, onStateChange = viewModel::onFormChange)
+            }
         }
     }
 }

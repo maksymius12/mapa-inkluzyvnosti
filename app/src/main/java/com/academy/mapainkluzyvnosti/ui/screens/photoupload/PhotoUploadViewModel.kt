@@ -2,13 +2,19 @@ package com.academy.mapainkluzyvnosti.ui.screens.photoupload
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.academy.mapainkluzyvnosti.data.model.CheckResult
+import com.academy.mapainkluzyvnosti.data.model.PlaceCategory
 import com.academy.mapainkluzyvnosti.data.remote.dto.AnalyzePlacePhotoResponse
 import com.academy.mapainkluzyvnosti.data.remote.toUserMessage
 import com.academy.mapainkluzyvnosti.data.repository.CheckRepository
 import com.academy.mapainkluzyvnosti.data.repository.PlaceRepository
 import com.academy.mapainkluzyvnosti.data.repository.UploadedPhoto
-import com.academy.mapainkluzyvnosti.ui.components.AccessCriterion
+import com.academy.mapainkluzyvnosti.ui.components.CriteriaKind
+import com.academy.mapainkluzyvnosti.ui.components.CriteriaSet
+import com.academy.mapainkluzyvnosti.ui.components.CriterionDef
+import com.academy.mapainkluzyvnosti.ui.components.EntranceCriteria
+import com.academy.mapainkluzyvnosti.ui.components.criteriaFor
+import com.academy.mapainkluzyvnosti.ui.components.entranceCheckFrom
+import com.academy.mapainkluzyvnosti.ui.components.toAnswers
 import com.academy.mapainkluzyvnosti.ui.state.CurrentUserStore
 import com.academy.mapainkluzyvnosti.ui.state.DemoModeStore
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,7 +27,7 @@ enum class AiVerdict { YES, NO, NOT_VISIBLE }
 
 /** Пропозиція ШІ по критерію: що він бачить, чому, і яке значення буде після «Замінити дані». */
 data class CriterionProposal(
-    val criterion: AccessCriterion,
+    val criterion: CriterionDef,
     val verdict: AiVerdict,
     val reason: String,
     /** Поточне значення з останньої перевірки людиною; null — перевірки ще не було. */
@@ -36,6 +42,8 @@ data class PhotoUploadUiState(
     /** Перемикач угорі: з ШІ-аналізом (за замовчуванням) чи просто завантажити фото. */
     val withAi: Boolean = true,
     val step: PhotoStep = PhotoStep.PICK,
+    /** Критерії місця: 7 для входу, 9 для зупинки. */
+    val set: CriteriaSet = EntranceCriteria,
     val analysis: AnalyzePlacePhotoResponse? = null,
     val proposals: List<CriterionProposal> = emptyList(),
     /** Чи є перевірка людиною, яку ШІ може «знизити». Без неї «Замінити дані» недоступне. */
@@ -48,7 +56,8 @@ data class PhotoUploadUiState(
 )
 
 /**
- * Фото місця з ШІ-аналізом або без. З аналізом людина бачить опис і пропозиції по 7 критеріях і обирає:
+ * Фото місця з ШІ-аналізом або без. З аналізом людина бачить опис і пропозиції по критеріях місця (7 для входу,
+ * 9 для зупинки) і обирає:
  * «Замінити дані й завантажити фото» (нова перевірка зі зниженими значеннями + статус ШІ) або
  * «Лише завантажити фото» (дані місця не змінюються). Принцип проєкту: ШІ може лише знизити статус.
  */
@@ -65,12 +74,22 @@ class PhotoUploadViewModel(
 
     /** Завантажений файл, для якого ще не створено рядок (щоб видалити його при скасуванні). */
     private var pending: UploadedPhoto? = null
-    private var humanCheck: CheckResult? = null
+    /** Остання перевірка людиною — відповіді за ключами критеріїв; null — перевірки ще не було. */
+    private var humanCheck: Map<String, Boolean>? = null
+    private var humanParking: Boolean = false
+    private var category: PlaceCategory? = null
 
     init {
         viewModelScope.launch {
-            humanCheck = runCatching { placeRepository.getPlaceById(placeId)?.checks }.getOrNull()
-            _uiState.update { it.copy(hasHumanCheck = humanCheck != null) }
+            val place = runCatching { placeRepository.getPlaceById(placeId) }.getOrNull()
+            category = place?.category
+            val set = place?.category?.let(::criteriaFor) ?: EntranceCriteria
+            humanCheck = when (set.kind) {
+                CriteriaKind.ENTRANCE -> place?.checks?.toAnswers()
+                CriteriaKind.STOP -> place?.stopCheck?.answers?.takeIf { a -> set.criteria.all { it.key in a } }
+            }
+            humanParking = place?.checks?.accessibleParking == true
+            _uiState.update { it.copy(set = set, hasHumanCheck = humanCheck != null) }
         }
     }
 
@@ -99,7 +118,9 @@ class PhotoUploadViewModel(
                 return@launch
             }
             _uiState.update { it.copy(step = PhotoStep.ANALYZING) }
-            runCatching { placeRepository.analyzePhoto(uploaded.url) }
+            // Для зупинки функція оцінює лише її видимі критерії (решта — «не видно»).
+            val aiCategory = if (_uiState.value.set.kind == CriteriaKind.STOP) "transit" else null
+            runCatching { placeRepository.analyzePhoto(uploaded.url, aiCategory) }
                 .onSuccess { analysis ->
                     if (!analysis.isPlacePhoto) {
                         placeRepository.deletePhotoFile(uploaded.path)
@@ -159,7 +180,12 @@ class PhotoUploadViewModel(
                 val base = humanCheck
                 if (applyData && base != null) {
                     val lowered = lowered(base, _uiState.value.proposals)
-                    checkRepository.submitCheck(placeId, userId, lowered, "За ШІ-аналізом фото (лише зниження)")
+                    val comment = "За ШІ-аналізом фото (лише зниження)"
+                    when (_uiState.value.set.kind) {
+                        CriteriaKind.ENTRANCE -> entranceCheckFrom(lowered, humanParking)
+                            ?.let { checkRepository.submitCheck(placeId, userId, it, comment) }
+                        CriteriaKind.STOP -> checkRepository.submitStopCheck(placeId, userId, lowered, comment)
+                    }
                 }
             }.onSuccess {
                 val message = when {
@@ -177,14 +203,14 @@ class PhotoUploadViewModel(
     }
 
     private fun proposals(analysis: AnalyzePlacePhotoResponse): List<CriterionProposal> =
-        AccessCriterion.entries.map { criterion ->
+        _uiState.value.set.criteria.map { criterion ->
             val raw = analysis.criteria[criterion.key]
             val verdict = when (raw?.verdict) {
                 "yes" -> AiVerdict.YES
                 "no" -> AiVerdict.NO
                 else -> AiVerdict.NOT_VISIBLE
             }
-            val current = humanCheck?.let(criterion::of)
+            val current = humanCheck?.get(criterion.key)
             CriterionProposal(
                 criterion = criterion,
                 verdict = verdict,
@@ -195,19 +221,9 @@ class PhotoUploadViewModel(
             )
         }
 
-    private fun lowered(base: CheckResult, proposals: List<CriterionProposal>): CheckResult {
-        fun value(c: AccessCriterion) = proposals.firstOrNull { it.criterion == c }?.proposed ?: c.of(base)
-        return base.copy(
-            ramp = value(AccessCriterion.RAMP),
-            doorWidth = value(AccessCriterion.DOOR_WIDTH),
-            threshold = value(AccessCriterion.THRESHOLD),
-            elevator = value(AccessCriterion.ELEVATOR),
-            toilet = value(AccessCriterion.TOILET),
-            tactile = value(AccessCriterion.TACTILE),
-            staffAssistance = value(AccessCriterion.STAFF),
-            checkedAt = null
-        )
-    }
+    /** «Ні» від ШІ знижує значення людини; «Так» і «не видно» лишають як є. */
+    private fun lowered(base: Map<String, Boolean>, proposals: List<CriterionProposal>): Map<String, Boolean> =
+        base.mapValues { (key, value) -> proposals.firstOrNull { it.criterion.key == key }?.proposed ?: value }
 
     @OptIn(kotlinx.coroutines.DelicateCoroutinesApi::class)
     override fun onCleared() {

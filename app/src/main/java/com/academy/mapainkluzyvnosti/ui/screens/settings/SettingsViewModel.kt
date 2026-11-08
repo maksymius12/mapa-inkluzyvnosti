@@ -49,7 +49,6 @@ class SettingsViewModel(
     val dialogState: StateFlow<SettingsDialogState> = _dialogState.asStateFlow()
 
     fun toggleTheme() = themeStore.toggle()
-    fun setSosNotifications(enabled: Boolean) = settingsStore.setSosNotificationsEnabled(enabled)
     fun setRouteNotifications(enabled: Boolean) = settingsStore.setRouteNotificationsEnabled(enabled)
     fun setLargeText(enabled: Boolean) = settingsStore.setLargeText(enabled)
 

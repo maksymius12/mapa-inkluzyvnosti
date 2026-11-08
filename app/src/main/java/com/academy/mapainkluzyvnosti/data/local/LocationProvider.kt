@@ -24,7 +24,7 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.coroutines.resume
 
-/** Джерело локації — так само зберігається в sos_requests.location_source. */
+/** Джерело локації: наскільки вірити позиції. */
 enum class LocationSource(val apiValue: String) {
     /** Свіжа точна позиція (супутники або точний Wi-Fi), ±100 м і краще. */
     GPS("gps"),

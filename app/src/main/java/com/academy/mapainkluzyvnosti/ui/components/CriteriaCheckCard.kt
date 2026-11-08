@@ -23,7 +23,14 @@ import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -48,68 +55,44 @@ import com.academy.mapainkluzyvnosti.ui.theme.CriterionYes
 import com.academy.mapainkluzyvnosti.ui.theme.OnCriterionChoice
 
 /**
- * 7 критеріїв доступності входу — єдине джерело назв і підказок для швидкої перевірки й ШІ-аналізу фото.
- * [key] — колонка checks / ключ у відповіді analyze-place-photo. Критичні (пандус, двері, поріг)
- * визначають «Недоступно» у ComputeAccessStatus.
- */
-enum class AccessCriterion(val key: String, val title: String, val hint: String, val critical: Boolean) {
-    RAMP("ramp", "Пандус", "Або вхід на рівні тротуару", critical = true),
-    DOOR_WIDTH("door_width", "Ширина дверей", "Не менше 0,8 м", critical = true),
-    THRESHOLD("threshold", "Поріг", "Не вище 2 см", critical = true),
-    ELEVATOR("elevator", "Ліфт або перший поверх", "Без сходів усередині", critical = false),
-    TOILET("toilet", "Доступний туалет", "Кабіна з місцем для візка", critical = false),
-    TACTILE("tactile", "Тактильні позначки", "Для людей з порушенням зору", critical = false),
-    STAFF("staff_assistance", "Допомога персоналу", "Працівники допоможуть зайти", critical = false);
-
-    fun of(check: CheckResult): Boolean = when (this) {
-        RAMP -> check.ramp
-        DOOR_WIDTH -> check.doorWidth
-        THRESHOLD -> check.threshold
-        ELEVATOR -> check.elevator
-        TOILET -> check.toilet
-        TACTILE -> check.tactile
-        STAFF -> check.staffAssistance
-    }
-}
-
-/**
- * Форма швидкої перевірки. null — критерій ще не оцінено (обидві половинки перемикача нейтральні):
- * «Ні» за замовчуванням не ставимо. Паркування — додатковий атрибут поза 7 критеріями.
+ * Форма швидкої перевірки для набору [set] (вхід — 7 критеріїв, зупинка — 9). null — критерій ще не оцінено
+ * (обидві половинки перемикача нейтральні): «Ні» за замовчуванням не ставимо. Паркування — лише для входу,
+ * на статус не впливає.
  */
 data class QuickCheckState(
-    val values: Map<AccessCriterion, Boolean?> = emptyMap(),
+    val set: CriteriaSet = EntranceCriteria,
+    val values: Map<String, Boolean?> = emptyMap(),
     val accessibleParking: Boolean? = null,
     val comment: String = ""
 ) {
-    fun value(criterion: AccessCriterion): Boolean? = values[criterion]
+    fun value(criterion: CriterionDef): Boolean? = values[criterion.key]
+    fun value(criterion: AccessCriterion): Boolean? = values[criterion.key]
 
-    fun with(criterion: AccessCriterion, value: Boolean) = copy(values = values + (criterion to value))
+    fun with(criterion: CriterionDef, value: Boolean) = copy(values = values + (criterion.key to value))
+    fun with(criterion: AccessCriterion, value: Boolean) = with(criterion.def, value)
 
-    val unanswered: List<AccessCriterion> get() = AccessCriterion.entries.filter { values[it] == null }
+    val unanswered: List<CriterionDef> get() = set.criteria.filter { values[it.key] == null }
 
-    /** null, доки не оцінено всі 7 критеріїв. Паркування без відповіді — «ні», як і раніше. */
-    fun toCheckResult(): CheckResult? {
-        if (unanswered.isNotEmpty()) return null
-        fun v(c: AccessCriterion) = values.getValue(c)!!
-        return CheckResult(
-            ramp = v(AccessCriterion.RAMP),
-            doorWidth = v(AccessCriterion.DOOR_WIDTH),
-            threshold = v(AccessCriterion.THRESHOLD),
-            elevator = v(AccessCriterion.ELEVATOR),
-            toilet = v(AccessCriterion.TOILET),
-            tactile = v(AccessCriterion.TACTILE),
-            staffAssistance = v(AccessCriterion.STAFF),
-            accessibleParking = accessibleParking == true
-        )
-    }
+    /** Вхід: null, доки не оцінено всі 7 критеріїв. Паркування без відповіді — «ні», як і раніше. */
+    fun toCheckResult(): CheckResult? =
+        if (set.kind != CriteriaKind.ENTRANCE || unanswered.isNotEmpty()) null
+        else entranceCheckFrom(values, accessibleParking == true)
+
+    /** Зупинка: усі 9 відповідей за ключами; null, доки не оцінено всі. */
+    fun toStopAnswers(): Map<String, Boolean>? =
+        if (set.kind != CriteriaKind.STOP || unanswered.isNotEmpty()) null
+        else set.criteria.associate { it.key to values.getValue(it.key)!! }
 
     companion object {
         /** Останні збережені значення місця — щоб повторна перевірка починалась з них. */
         fun from(check: CheckResult?): QuickCheckState =
             if (check == null) QuickCheckState()
-            else QuickCheckState(
-                values = AccessCriterion.entries.associateWith { it.of(check) },
-                accessibleParking = check.accessibleParking
+            else QuickCheckState(values = check.toAnswers(), accessibleParking = check.accessibleParking)
+
+        fun forStop(answers: Map<String, Boolean>?): QuickCheckState =
+            QuickCheckState(
+                set = StopCriteria,
+                values = answers.orEmpty().filterKeys { key -> StopCriteria.criteria.any { it.key == key } }
             )
     }
 }
@@ -118,17 +101,20 @@ data class QuickCheckState(
 data class CriterionNote(val text: String, val fromAi: Boolean = false)
 
 /**
- * Картка «Оцініть вхід до закладу»: групи «Критичні» і «Додаткові», у кожному рядку — назва, підказка
- * й перемикач «Так | Ні». [onValueChange] = null — лише перегляд (значення, запропоновані ШІ).
+ * Картка «Оцініть вхід до закладу» / «Оцініть зупинку»: групи «Критичні» і «Додаткові», у кожному рядку —
+ * назва, коротка підказка (повне формулювання — кнопка «i») і перемикач «Так | Ні».
+ * [onValueChange] = null — лише перегляд (значення, запропоновані ШІ, або збережена перевірка).
  */
 @Composable
 fun CriteriaCheckCard(
-    values: (AccessCriterion) -> Boolean?,
-    onValueChange: ((AccessCriterion, Boolean) -> Unit)?,
+    set: CriteriaSet,
+    values: (CriterionDef) -> Boolean?,
+    onValueChange: ((CriterionDef, Boolean) -> Unit)?,
     modifier: Modifier = Modifier,
-    title: String = "Оцініть вхід до закладу",
-    notes: Map<AccessCriterion, CriterionNote> = emptyMap()
+    title: String = set.cardTitle,
+    notes: Map<String, CriterionNote> = emptyMap()
 ) {
+    var detailsFor by remember { mutableStateOf<CriterionDef?>(null) }
     MapaCard(modifier = modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(20.dp)) {
             Text(
@@ -144,19 +130,28 @@ fun CriteriaCheckCard(
                     color = if (critical) CriterionNo else MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = if (critical) 16.dp else 20.dp, bottom = 4.dp)
                 )
-                val group = AccessCriterion.entries.filter { it.critical == critical }
+                val group = set.criteria.filter { it.critical == critical }
                 group.forEachIndexed { index, criterion ->
                     CriterionRow(
                         title = criterion.title,
                         hint = criterion.hint,
                         value = values(criterion),
                         onValueChange = onValueChange?.let { change -> { v: Boolean -> change(criterion, v) } },
-                        note = notes[criterion]
+                        note = notes[criterion.key],
+                        onShowDetails = criterion.details?.let { { detailsFor = criterion } }
                     )
                     if (index < group.lastIndex) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 }
             }
         }
+    }
+    detailsFor?.let { criterion ->
+        AlertDialog(
+            onDismissRequest = { detailsFor = null },
+            title = { Text(criterion.title) },
+            text = { Text(criterion.details.orEmpty(), style = MaterialTheme.typography.bodyLarge) },
+            confirmButton = { TextButton(onClick = { detailsFor = null }) { Text("Зрозуміло") } }
+        )
     }
 }
 
@@ -169,10 +164,12 @@ fun QuickCheckForm(
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
         CriteriaCheckCard(
-            values = state::value,
+            set = state.set,
+            values = { state.value(it) },
             onValueChange = { criterion, value -> onStateChange(state.with(criterion, value)) }
         )
-        MapaCard(modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
+        // Паркування — атрибут закладу; для зупинки не питаємо.
+        if (state.set.kind == CriteriaKind.ENTRANCE) MapaCard(modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
             Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)) {
                 GroupLabel(
                     text = "ДОДАТКОВО · НЕ ВПЛИВАЄ НА СТАТУС",
@@ -184,7 +181,8 @@ fun QuickCheckForm(
                     hint = "Місце для авто людей з інвалідністю",
                     value = state.accessibleParking,
                     onValueChange = { onStateChange(state.copy(accessibleParking = it)) },
-                    note = null
+                    note = null,
+                    onShowDetails = null
                 )
             }
         }
@@ -228,7 +226,8 @@ private fun CriterionRow(
     hint: String,
     value: Boolean?,
     onValueChange: ((Boolean) -> Unit)?,
-    note: CriterionNote?
+    note: CriterionNote?,
+    onShowDetails: (() -> Unit)?
 ) {
     // Враховує і системний масштаб шрифту, і «Великий текст» у налаштуваннях застосунку.
     val textScale = LocalDensity.current.fontScale * MaterialTheme.typography.bodyLarge.fontSize.value / 16f
@@ -271,9 +270,20 @@ private fun CriterionRow(
             }
         }
     }
+    // «i» — окрема кнопка поза об'єднаним текстом, щоб TalkBack читав її як дію.
+    val info: @Composable () -> Unit = {
+        if (onShowDetails != null) {
+            IconButton(onClick = onShowDetails, modifier = Modifier.size(48.dp)) {
+                Icon(Icons.Outlined.Info, contentDescription = "Повне формулювання: $title", tint = MaterialTheme.colorScheme.primary)
+            }
+        }
+    }
     if (stacked) {
         Column(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
-            text(Modifier.fillMaxWidth())
+            Row(verticalAlignment = Alignment.Top) {
+                text(Modifier.weight(1f))
+                info()
+            }
             YesNoToggle(title, value, onValueChange, Modifier.fillMaxWidth().padding(top = 10.dp))
         }
     } else {
@@ -283,6 +293,7 @@ private fun CriterionRow(
             modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp)
         ) {
             text(Modifier.weight(1f))
+            info()
             YesNoToggle(title, value, onValueChange, Modifier.widthIn(min = 128.dp).width(IntrinsicSize.Max))
         }
     }

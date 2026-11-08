@@ -15,6 +15,8 @@
 // Відповідь: {"isPlacePhoto": true | false, "title": "...", "summary": "...", "suggestions": ["..."],
 //              "status": "accessible" | "partial" | "barrier",
 //              "criteria": {"ramp": {"verdict": "yes" | "no" | "not_visible", "reason": "..."}, ... (7 критеріїв)}}.
+// Запит може містити category: "transit" — тоді критерії зупинки (9; pavilion, accessible_transport,
+// tactile_route з фото не перевірити — завжди not_visible), критичні — platform_height і obstacle_free.
 // Критерій, якого не видно на фото, модель має чесно позначити not_visible, а не вгадувати.
 // status ніколи не буде кращим, ніж випливає з критеріїв «ні» (сервер знижує його сам).
 // isPlacePhoto = false — на фото не реальне місце (мем, скриншот, картинка з інтернету, селфі тощо):
@@ -44,6 +46,39 @@ const CRITERIA: Record<string, string> = {
 };
 const ENTRANCE = ["ramp", "door_width", "threshold"];
 
+// Зупинка громадського транспорту (category = "transit"): 9 критеріїв (public.criteria_definitions).
+// Оцінюємо ЛИШЕ те, що видно на одному фото; NOT_ON_PHOTO — завжди not_visible (з фото не перевірити).
+const STOP_CRITERIA: Record<string, string> = {
+  shelter: "на зупинці облаштовано навіс",
+  seating: "облаштовано місця для сидіння (лави)",
+  pavilion: "павільйон не ближче 2 м від дороги, лава не менше 3 м",
+  tactile_strip: "попереджувальна тактильна смуга біля краю посадкового майданчика й інформаційна смуга місця посадки",
+  passenger_info: "засоби інформування: електронне табло, таблиця з розкладом, схема руху",
+  accessible_transport: "доступний транспорт не рідше 1 рейсу на годину",
+  tactile_route: "тактильні елементи від закладів соцінфраструктури до зупинки",
+  platform_height: "висота посадкового майданчика 20–25 см від дороги, урівень із низькою підлогою транспорту",
+  obstacle_free: "доступ до зупинки вільний від перешкод (огорожі, опори, стенди, стовпчики, напівсфери)",
+};
+const STOP_NOT_ON_PHOTO = ["pavilion", "accessible_transport", "tactile_route"];
+const STOP_CRITICAL = ["platform_height", "obstacle_free"];
+
+const STOP_PROMPT =
+  "Ти перевіряєш доступність зупинки громадського транспорту для людей з інвалідністю за фото.\n" +
+  "1) Спершу визнач, чи це справжня фотографія реальної зупинки чи вулиці, зроблена на камеру. Мем, скриншот, " +
+  "малюнок, картинка з інтернету, селфі — isPlacePhoto = false, у title коротко поясни чому, критерії — not_visible.\n" +
+  "2) Інакше isPlacePhoto = true. Оціни ЛИШЕ те, що видно на фото. Для кожного критерію дай verdict і коротку " +
+  "причину (reason, до 15 слів, українською):\n" +
+  Object.entries(STOP_CRITERIA).filter(([key]) => !STOP_NOT_ON_PHOTO.includes(key))
+    .map(([key, text]) => `- ${key}: ${text}`).join("\n") + "\n" +
+  `Критерії ${STOP_NOT_ON_PHOTO.join(", ")} з одного фото не перевірити — для них завжди not_visible.\n` +
+  "verdict: yes — на фото чітко видно, що вимогу виконано; no — чітко видно, що не виконано; not_visible — не " +
+  "видно або не можна визначити напевно. НЕ вгадуй: якщо сумніваєшся, став not_visible.\n" +
+  "3) summary — 2–3 речення українською: що видно на фото з погляду доступності зупинки.\n" +
+  "4) title — головна проблема до 8 слів (або «Бар'єрів на зупинці не видно»). suggestions — 2–4 конкретні " +
+  "пропозиції, як покращити доступність.\n" +
+  "5) status: barrier — platform_height або obstacle_free має verdict no; partial — є інші «ні» або зупинку видно " +
+  "не повністю; accessible — лише якщо все видиме виконано.";
+
 const PROMPT =
   "Ти перевіряєш доступність місця для людей з інвалідністю за фото.\n" +
   "1) Спершу визнач, чи це справжня фотографія реального місця (будівля, вхід, приміщення, вулиця), зроблена " +
@@ -64,7 +99,8 @@ const PROMPT =
   "вхід видно не повністю; accessible — лише якщо вхід добре видно і бар'єрів немає.";
 
 // Structured outputs (OpenAI json_schema, strict): модель гарантовано повертає саме цей JSON.
-const RESPONSE_FORMAT = {
+function responseFormat(criteria: Record<string, string>) {
+  return {
   type: "json_schema",
   json_schema: {
     name: "accessibility_analysis",
@@ -79,7 +115,7 @@ const RESPONSE_FORMAT = {
         status: { type: "string", enum: STATUSES },
         criteria: {
           type: "object",
-          properties: Object.fromEntries(Object.keys(CRITERIA).map((key) => [key, {
+          properties: Object.fromEntries(Object.keys(criteria).map((key) => [key, {
             type: "object",
             properties: {
               verdict: { type: "string", enum: VERDICTS },
@@ -88,7 +124,7 @@ const RESPONSE_FORMAT = {
             required: ["verdict", "reason"],
             additionalProperties: false,
           }])),
-          required: Object.keys(CRITERIA),
+          required: Object.keys(criteria),
           additionalProperties: false,
         },
       },
@@ -96,7 +132,8 @@ const RESPONSE_FORMAT = {
       additionalProperties: false,
     },
   },
-};
+  };
+}
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
@@ -128,7 +165,11 @@ Deno.serve(async (req) => {
     });
     if (!userRes.ok) return json({ error: "sign in required" }, 401);
 
-    const { photoUrl } = await req.json().catch(() => ({}));
+    const { photoUrl, category } = await req.json().catch(() => ({}));
+    // Набір критеріїв — за категорією місця (обмежує й промпт, і схему відповіді).
+    const isStop = category === "transit";
+    const criteriaSet = isStop ? STOP_CRITERIA : CRITERIA;
+    const critical = isStop ? STOP_CRITICAL : ENTRANCE;
     // Аналізуємо лише фото з власного публічного бакета — функція не має бути проксі для довільних URL.
     const allowedPrefix = `${supabaseUrl}/storage/v1/object/public/place-photos/`;
     if (typeof photoUrl !== "string" || !photoUrl.startsWith(allowedPrefix)) {
@@ -157,11 +198,11 @@ Deno.serve(async (req) => {
         messages: [{
           role: "user",
           content: [
-            { type: "text", text: PROMPT },
+            { type: "text", text: isStop ? STOP_PROMPT : PROMPT },
             { type: "image_url", image_url: { url: `data:${mimeType};base64,${toBase64(image)}` } },
           ],
         }],
-        response_format: RESPONSE_FORMAT,
+        response_format: responseFormat(criteriaSet),
         temperature: 0.1,
         max_tokens: 1200,
       }),
@@ -183,15 +224,17 @@ Deno.serve(async (req) => {
       return json({ error: "unexpected model output" }, 502);
     }
     const criteria: Record<string, { verdict: string; reason: string }> = {};
-    for (const key of Object.keys(CRITERIA)) {
+    for (const key of Object.keys(criteriaSet)) {
       const c = parsed.criteria?.[key];
-      const verdict = VERDICTS.includes(c?.verdict) ? c.verdict : "not_visible";
+      // Те, що з фото не перевірити, — завжди «не видно», навіть якщо модель вигадала відповідь.
+      const forcedHidden = isStop && STOP_NOT_ON_PHOTO.includes(key);
+      const verdict = !forcedHidden && VERDICTS.includes(c?.verdict) ? c.verdict : "not_visible";
       criteria[key] = { verdict, reason: typeof c?.reason === "string" ? c.reason.trim().slice(0, 160) : "" };
     }
     // ШІ може лише знизити оцінку: статус не кращий, ніж випливає з критеріїв «ні».
     const severity = (s: string) => STATUSES.indexOf(s);
     let status = parsed.status as string;
-    if (ENTRANCE.some((k) => criteria[k].verdict === "no")) status = "barrier";
+    if (critical.some((k) => criteria[k].verdict === "no")) status = "barrier";
     else if (Object.values(criteria).some((c) => c.verdict === "no") && severity(status) < severity("partial")) status = "partial";
     return json({
       isPlacePhoto: parsed.isPlacePhoto,

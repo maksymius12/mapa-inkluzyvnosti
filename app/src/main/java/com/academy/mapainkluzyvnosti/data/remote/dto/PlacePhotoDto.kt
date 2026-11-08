@@ -18,7 +18,11 @@ data class PlacePhotoDto(
 )
 
 @Serializable
-data class AnalyzePlacePhotoRequest(val photoUrl: String)
+data class AnalyzePlacePhotoRequest(
+    val photoUrl: String,
+    /** «transit» — оцінювати за критеріями зупинки; інакше — 7 критеріїв входу. */
+    val category: String? = null
+)
 
 @Serializable
 data class AnalyzePlacePhotoResponse(

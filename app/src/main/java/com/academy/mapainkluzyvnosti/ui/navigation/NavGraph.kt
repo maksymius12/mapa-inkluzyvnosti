@@ -32,7 +32,6 @@ import com.academy.mapainkluzyvnosti.ui.screens.login.VerifyCodeScreen
 import com.academy.mapainkluzyvnosti.ui.screens.login.RoleSetupScreen
 import com.academy.mapainkluzyvnosti.ui.screens.login.SignUpScreen
 import com.academy.mapainkluzyvnosti.ui.screens.map.MapScreen
-import com.academy.mapainkluzyvnosti.ui.screens.notifications.NotificationsScreen
 import com.academy.mapainkluzyvnosti.ui.screens.photoupload.PhotoUploadScreen
 import com.academy.mapainkluzyvnosti.ui.screens.placedetail.PlaceDetailScreen
 import com.academy.mapainkluzyvnosti.ui.screens.profile.ProfileScreen
@@ -42,15 +41,10 @@ import com.academy.mapainkluzyvnosti.ui.screens.quickcheck.QuickCheckScreen
 import com.academy.mapainkluzyvnosti.ui.screens.route.RouteScreen
 import com.academy.mapainkluzyvnosti.ui.screens.search.SearchScreen
 import com.academy.mapainkluzyvnosti.ui.screens.settings.SettingsScreen
-import com.academy.mapainkluzyvnosti.ui.screens.sos.SosRequestScreen
 import com.academy.mapainkluzyvnosti.ui.screens.welcome.WelcomeScreen
 import com.academy.mapainkluzyvnosti.ui.screens.tutorial.TutorialScreen
 import com.academy.mapainkluzyvnosti.ui.state.AppStartup
 import com.academy.mapainkluzyvnosti.ui.state.ModerationCountsStore
-import com.academy.mapainkluzyvnosti.ui.state.SosController
-import com.academy.mapainkluzyvnosti.ui.state.SosPhase
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
 import com.academy.mapainkluzyvnosti.ui.state.TutorialCoordinator
 import com.academy.mapainkluzyvnosti.ui.state.TutorialMode
 import com.academy.mapainkluzyvnosti.ui.state.WhatsNewStore
@@ -77,26 +71,7 @@ fun MapaNavHost(startRoute: String) {
     fun goToLogin() = navController.navigate(Routes.LOGIN) { popUpTo(0) { inclusive = true } }
 
     val koinTutorial = koinInject<TutorialCoordinator>()
-    val sosController = koinInject<SosController>()
     val moderationCounts by koinInject<ModerationCountsStore>().counts.collectAsState()
-
-    /** SOS утримано: запит створюється й надсилається одразу, екран лише показує його стан. */
-    fun sendSos() {
-        sosController.trigger()
-        navController.navigate(Routes.SOS_REQUEST) { launchSingleTop = true }
-    }
-
-    // SOS, надісланий з екрана «Ви не в мережі», або незавершений запит, відновлений після перезапуску, —
-    // одразу показуємо його стан (і 112).
-    LaunchedEffect(Unit) {
-        sosController.state.map { it.phase }.distinctUntilChanged().collect { phase ->
-            if ((phase == SosPhase.SENDING || phase == SosPhase.QUEUED) &&
-                navController.currentDestination?.route != Routes.SOS_REQUEST
-            ) {
-                navController.navigate(Routes.SOS_REQUEST) { launchSingleTop = true }
-            }
-        }
-    }
 
     /** Після входу/реєстрації: мапа стає коренем стеку, екрани входу прибираються. */
     fun goToMapAfterAuth() {
@@ -124,8 +99,7 @@ fun MapaNavHost(startRoute: String) {
                         BottomNavEntry("Профіль", Icons.Filled.Person, selected(Routes.PROFILE), badgeCount = moderationCounts.total) {
                             navController.switchTab(Routes.PROFILE)
                         }
-                    ),
-                    onSos = { sendSos() }
+                    )
                 )
             }
         }
@@ -236,12 +210,11 @@ fun MapaNavHost(startRoute: String) {
                 // інакше — одноразова підказка перевірити підставлені мету й вік.
                 LaunchedEffect(Unit) {
                     val pending = tutorial.pendingTutorial()
-                    val sosActive = sosController.state.value.phase.let { it == SosPhase.SENDING || it == SosPhase.QUEUED }
                     if (pending != null) {
                         // Інструктаж і так показує застосунок — «Що нового» вже не потрібне.
                         whatsNew.markSeen()
                         navController.navigate(Routes.tutorial(pending)) { launchSingleTop = true }
-                    } else if (whatsNew.hasPending && !sosActive) {
+                    } else if (whatsNew.hasPending) {
                         navController.navigate(Routes.WHATS_NEW) { launchSingleTop = true }
                     } else if (tutorial.shouldPromptRolesReview()) {
                         showRolesPrompt = true
@@ -310,12 +283,11 @@ fun MapaNavHost(startRoute: String) {
                 ProfileScreen(
                     onOpenRoutes = { navController.navigate(Routes.favorites(Routes.FAVORITES_TAB_ROUTES)) },
                     onOpenFavorites = { navController.navigate(Routes.favorites(Routes.FAVORITES_TAB_PLACES)) },
-                    onOpenNotifications = { navController.navigate(Routes.NOTIFICATIONS) },
                     onOpenSettings = { navController.navigate(Routes.SETTINGS) },
-                    onOpenHelp = { navController.navigate(Routes.SOS_REQUEST) },
                     onOpenTutorial = { navController.navigate(Routes.tutorial(tutorialMode(koinTutorial))) },
                     onOpenPlaceRequests = { navController.navigate(Routes.PLACE_REQUESTS) },
                     onOpenAdmin = { navController.navigate(Routes.ADMIN_USERS) },
+                    onOpenPlace = { placeId -> navController.navigate(Routes.placeDetail(placeId)) },
                     onSignedOut = { goToLogin() }
                 )
             }
@@ -332,21 +304,11 @@ fun MapaNavHost(startRoute: String) {
                     onOpenTutorial = { navController.navigate(Routes.tutorial(tutorialMode(koinTutorial))) }
                 )
             }
-            composable(Routes.NOTIFICATIONS) {
-                NotificationsScreen(onBack = { navController.popBackStack() })
-            }
             composable(Routes.ROUTE_PLANNER_PATTERN) { backStackEntry ->
                 val placeId = backStackEntry.arguments?.getString("placeId").orEmpty()
                 RouteScreen(
                     destinationPlaceId = placeId,
-                    onBack = { navController.popBackStack() },
-                    onOpenSos = { sendSos() }
-                )
-            }
-            composable(Routes.SOS_REQUEST) {
-                SosRequestScreen(
-                    onDone = { navController.popBackStack() },
-                    onRequestLogin = { goToLogin() }
+                    onBack = { navController.popBackStack() }
                 )
             }
             composable(Routes.PLACE_DETAIL_PATTERN) { backStackEntry ->

@@ -71,11 +71,9 @@ import com.academy.mapainkluzyvnosti.ui.components.OpenDataTag
 import com.academy.mapainkluzyvnosti.ui.components.PlaceThumbnail
 import com.academy.mapainkluzyvnosti.ui.components.PrimaryButton
 import com.academy.mapainkluzyvnosti.ui.components.RatingRow
-import com.academy.mapainkluzyvnosti.ui.components.SosInfoCard
 import com.academy.mapainkluzyvnosti.ui.components.StatusBadge
 import com.academy.mapainkluzyvnosti.ui.components.visual
 import com.academy.mapainkluzyvnosti.ui.maplibre.MapStyles
-import com.academy.mapainkluzyvnosti.ui.maplibre.SOS_MARKER_IMAGE_ID
 import com.academy.mapainkluzyvnosti.ui.maplibre.awaitMap
 import com.academy.mapainkluzyvnosti.ui.maplibre.districtBounds
 import com.academy.mapainkluzyvnosti.ui.maplibre.ensure3dBuildings
@@ -116,10 +114,9 @@ fun MapScreen(
     addPlaceViewModel: AddPlaceViewModel = koinViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    // Зв'язок відновився — свіжі місця, SOS і межа району.
+    // Зв'язок відновився — свіжі місця й межа району.
     OnReconnected { viewModel.refresh() }
     val addState by addPlaceViewModel.uiState.collectAsState()
-    val isVolunteer by viewModel.isVolunteer.collectAsState()
     val selection by viewModel.filterSelection.collectAsState()
     val districtBoundary by viewModel.districtBoundary.collectAsState()
     val context = LocalContext.current
@@ -133,7 +130,7 @@ fun MapScreen(
     val locationProvider = koinInject<LocationProvider>()
     val locationUnreliable by locationProvider.isUnreliable.collectAsState()
 
-    // Список місць і активних SOS не повинен переживати довше одного показу екрана:
+    // Список місць не повинен переживати довше одного показу екрана:
     // щоразу, коли карта повертається на передній план (у т.ч. після відкриття іншої
     // вкладки й повернення), тягнемо свіжі дані з Supabase замість застояного
     // стану, що зберігся у ViewModel завдяки saveState/restoreState нижньої навігації.
@@ -281,21 +278,6 @@ fun MapScreen(
         }
     }
 
-    val sosSymbolManager = remember(mapStyle) {
-        val map = maplibreMap
-        val style = mapStyle
-        if (map != null && style != null) {
-            SymbolManager(mapView, map, style).apply {
-                addClickListener { symbol ->
-                    symbol.data?.asString?.let { viewModel.selectSos(it) }
-                    true
-                }
-            }
-        } else {
-            null
-        }
-    }
-
     LaunchedEffect(placesSymbolManager, uiState.places, uiState.selectedPlaceId) {
         val manager = placesSymbolManager ?: return@LaunchedEffect
         manager.deleteAll()
@@ -307,20 +289,6 @@ fun MapScreen(
                 .withIconImage(image)
                 .withIconSize(if (place.id == uiState.selectedPlaceId) SELECTED_ICON_SCALE else 1f)
                 .withData(JsonPrimitive(place.id))
-        }
-        if (options.isNotEmpty()) manager.create(options)
-    }
-
-    LaunchedEffect(sosSymbolManager, uiState.sosRequests) {
-        val manager = sosSymbolManager ?: return@LaunchedEffect
-        manager.deleteAll()
-        // Запити без локації на мапі не показати — їх видно в «Повідомленнях».
-        val options = uiState.sosRequests.mapNotNull { sos ->
-            val point = sos.point ?: return@mapNotNull null
-            SymbolOptions()
-                .withLatLng(LatLng(point.lat, point.lng))
-                .withIconImage(SOS_MARKER_IMAGE_ID)
-                .withData(JsonPrimitive(sos.id))
         }
         if (options.isNotEmpty()) manager.create(options)
     }
@@ -442,13 +410,12 @@ fun MapScreen(
             }
         }
 
-        // Низ: «Додати місце» зліва, «моє місце» й масштаб справа, під ними — картка вибраного місця/SOS.
+        // Низ: «Додати місце» зліва, «моє місце» й масштаб справа, під ними — картка вибраного місця.
         if (!isPickingLocation) Column(modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
             Row(
                 verticalAlignment = Alignment.Bottom,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)
             ) {
-                // Запит допомоги (SOS) — у нижній панелі навігації, а не плаваючою кнопкою над мапою.
                 AddPlaceButton(onClick = {
                     if (addPlaceViewModel.startPicking()) viewModel.clearSelection()
                 })
@@ -491,15 +458,6 @@ fun MapScreen(
                     activeTypes = uiState.activeTypes,
                     onDetails = { onOpenPlace(place.id) },
                     onClose = viewModel::clearSelection,
-                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
-                )
-            }
-
-            uiState.selectedSos?.let { sos ->
-                SosInfoCard(
-                    sos = sos,
-                    isVolunteer = isVolunteer,
-                    onResolve = viewModel::resolveSelectedSos,
                     modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
                 )
             }

@@ -2,7 +2,7 @@ package com.academy.mapainkluzyvnosti.ui.screens.tutorial
 
 import com.academy.mapainkluzyvnosti.ui.state.TutorialMode
 
-enum class TutorialIllustration { MAP_MARKERS, SEARCH, ROUTE, CONTRIBUTE, SIGN_IN, HELP_REQUEST }
+enum class TutorialIllustration { MAP_MARKERS, FIND, CHECK_CARD, ROLES, SIGN_IN }
 
 /** Слайд інструктажу. [illustrationDescription] читає TalkBack замість малюнка. */
 data class TutorialSlide(
@@ -12,59 +12,54 @@ data class TutorialSlide(
     val illustrationDescription: String
 )
 
+// Як у PlaceMarker: іконка — категорія закладу, значок у куті — статус доступності.
 private val mapSlide = TutorialSlide(
     title = "Мапа й позначки",
-    text = "Кожна позначка — це місце. Колір показує, що там є: синій — пандус, зелений — туалет, " +
-        "жовтий — паркування, фіолетовий — ліфт, рожевий — допомога персоналу. Сіра — даних ще немає, " +
-        "пунктирна — нове місце, яке ще не перевірили. Статус доступності видно на картці місця.",
+    text = "Іконка позначки — категорія закладу: освіта, медицина, кафе, магазин тощо. Маленький значок у куті — " +
+        "доступність: зелений — виконано всі 7 критеріїв, жовтий — частково доступно, червоний — бракує " +
+        "критичного критерію, пунктир — ще не перевірено.",
     illustration = TutorialIllustration.MAP_MARKERS,
-    illustrationDescription = "Ілюстрація: фрагмент мапи з кольоровими позначками місць і одною пунктирною позначкою"
+    illustrationDescription = "Ілюстрація: позначки з іконками категорій — школа, лікарня, кафе, магазин — " +
+        "і значками доступності в куті: зеленим, жовтим, червоним і пунктирним"
 )
 
-private val searchSlide = TutorialSlide(
-    title = "Знайди потрібне",
-    text = "Пошук і фільтри за типом доступності та категорією допоможуть швидко знайти заклад.",
-    illustration = TutorialIllustration.SEARCH,
-    illustrationDescription = "Ілюстрація: рядок пошуку й кнопки фільтрів"
+private val findSlide = TutorialSlide(
+    title = "Знайди й дійди",
+    text = "Шукай за назвою чи адресою, а категорію вибирай фільтром просто на мапі. На картці місця — статус " +
+        "доступності, графік роботи й позначка «Відчинено зараз» або «Зачинено». «Будувати маршрут» попередить " +
+        "про бар'єри на шляху. Оголошення — на вкладці «Новини».",
+    illustration = TutorialIllustration.FIND,
+    illustrationDescription = "Ілюстрація: рядок пошуку, маршрут до місця й позначка «Відчинено зараз»"
 )
 
-private val routeSlide = TutorialSlide(
-    title = "Дізнайся деталі й дійди",
-    text = "Натисни на місце, щоб побачити інформацію про доступність. Кнопка «Будувати маршрут» " +
-        "прокладе шлях і попередить про бар'єри на ньому.",
-    illustration = TutorialIllustration.ROUTE,
-    illustrationDescription = "Ілюстрація: маршрут від точки до місця з позначкою бар'єра на шляху"
+private val checkSlide = TutorialSlide(
+    title = "Оцініть вхід до закладу",
+    text = "«Пройти перевірку» на картці місця відкриває 7 критеріїв із перемикачами «Так | Ні» — спершу нічого " +
+        "не вибрано. Критичні: пандус, ширина дверей, поріг. Додаткові: ліфт або перший поверх, туалет, " +
+        "тактильні позначки, допомога персоналу. Зберегти можна, коли оцінено всі. Зупинки транспорту мають " +
+        "окремі 9 критеріїв («Оцініть зупинку»): критичні — висота посадкового майданчика й вільний доступ.",
+    illustration = TutorialIllustration.CHECK_CARD,
+    illustrationDescription = "Ілюстрація: картка перевірки з групами «Критичні» й «Додаткові» та перемикачами «Так» і «Ні»"
 )
 
-private val contributeSlide = TutorialSlide(
-    title = "Допоможи іншим",
-    text = "Додай нове місце кнопкою «+ Додати місце» й пройди перевірку за 7 критеріями — це до 1 хвилини. " +
-        "Дорослі користувачі можуть додати фото входу.",
-    illustration = TutorialIllustration.CONTRIBUTE,
-    illustrationDescription = "Ілюстрація: кнопка додавання місця, список перевірки й камера"
+private val rolesSlide = TutorialSlide(
+    title = "Хто що може",
+    text = "Мешканець пропонує зміни: нове місце — заявкою, нову назву — кнопкою «Запропонувати зміну назви»; " +
+        "статус видно в Профіль → «Мої заявки». Волонтери, учні й адмін розглядають заявки, додають місця одразу " +
+        "й редагують графік роботи. Відгук і оцінку може залишити кожен, хто увійшов.",
+    illustration = TutorialIllustration.ROLES,
+    illustrationDescription = "Ілюстрація: мешканець надсилає пропозицію, волонтер її схвалює"
 )
 
 private val guestContributeSlide = TutorialSlide(
     title = "Допоможи іншим",
-    text = "Увійдіть, щоб додавати місця й перевіряти їх.",
+    text = "Увійдіть, щоб перевіряти місця, залишати відгуки й пропонувати нові місця.",
     illustration = TutorialIllustration.SIGN_IN,
     illustrationDescription = "Ілюстрація: вхід в акаунт"
 )
 
-// Запит допомоги отримують усі волонтери застосунку (без відбору за відстанню), тож без слова «поруч».
-private val helpSlide = TutorialSlide(
-    title = "Запит допомоги",
-    text = "Кнопка «Потрібна допомога» на мапі (або Профіль → Допомога) створює запит: волонтери застосунку " +
-        "побачать його на мапі. Це не заміна 112.",
-    illustration = TutorialIllustration.HELP_REQUEST,
-    illustrationDescription = "Ілюстрація: знак запиту допомоги й волонтери"
-)
-
-/**
- * Повний інструктаж — 5 слайдів. Гість — 2: що на мапі й як отримати решту можливостей.
- * Запит допомоги гостю недоступний (демо-режим), тож цього слайда в нього немає.
- */
+/** Повний інструктаж — 4 слайди. Гість — 2: що на мапі й як отримати решту можливостей. */
 fun tutorialSlides(mode: TutorialMode): List<TutorialSlide> = when (mode) {
-    TutorialMode.FULL -> listOf(mapSlide, searchSlide, routeSlide, contributeSlide, helpSlide)
+    TutorialMode.FULL -> listOf(mapSlide, findSlide, checkSlide, rolesSlide)
     TutorialMode.GUEST -> listOf(mapSlide, guestContributeSlide)
 }

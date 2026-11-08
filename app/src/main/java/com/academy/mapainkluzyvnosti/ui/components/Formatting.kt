@@ -28,3 +28,6 @@ fun formatCheckDate(iso: String): String? = runCatching {
         .atZoneSameInstant(java.time.ZoneId.systemDefault())
         .format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy"))
 }.getOrNull()
+
+/** ISO-час із сервера -> мілісекунди; null, якщо не розібрати. */
+fun parseInstantMs(iso: String): Long? = runCatching { java.time.OffsetDateTime.parse(iso).toInstant().toEpochMilli() }.getOrNull()

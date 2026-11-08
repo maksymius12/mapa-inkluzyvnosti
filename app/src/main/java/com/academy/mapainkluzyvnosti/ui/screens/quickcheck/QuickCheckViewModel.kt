@@ -8,7 +8,9 @@ import com.academy.mapainkluzyvnosti.data.repository.AuthRepository
 import com.academy.mapainkluzyvnosti.data.repository.CheckRepository
 import com.academy.mapainkluzyvnosti.data.repository.PlaceRepository
 import com.academy.mapainkluzyvnosti.data.repository.ProfileStatus
+import com.academy.mapainkluzyvnosti.ui.components.CriteriaKind
 import com.academy.mapainkluzyvnosti.ui.components.QuickCheckState
+import com.academy.mapainkluzyvnosti.ui.components.criteriaFor
 import com.academy.mapainkluzyvnosti.ui.state.CurrentUserStore
 import com.academy.mapainkluzyvnosti.ui.state.DemoModeStore
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -19,6 +21,8 @@ import kotlinx.coroutines.launch
 
 data class QuickCheckUiState(
     val form: QuickCheckState = QuickCheckState(),
+    /** Поки не відомо, вхід це чи зупинка, — форму не показуємо (інакше мигнули б 7 критеріїв замість 9). */
+    val isLoadingPlace: Boolean = true,
     val isSubmitting: Boolean = false,
     val isSubmitted: Boolean = false,
     val errorMessage: String? = null,
@@ -26,7 +30,7 @@ data class QuickCheckUiState(
 )
 
 /**
- * Перевірка за 7 критеріями: може пройти будь-який авторизований користувач для будь-якого місця
+ * Перевірка за 7 критеріями входу (або 9 — для зупинки): може пройти будь-який авторизований користувач для будь-якого місця
  * (своє, чуже, OSM, відкриті дані). Записує лише рядок у checks; статус місця, паркування й бали учня
  * перераховує серверний тригер — права на зміну назви чи категорії місця для цього не потрібні.
  */
@@ -43,12 +47,16 @@ class QuickCheckViewModel(
     val uiState: StateFlow<QuickCheckUiState> = _uiState.asStateFlow()
 
     init {
-        // Повторна перевірка починається з останніх збережених значень; нове місце — з «не вибрано».
+        // Набір критеріїв — за категорією місця. Повторна перевірка починається з останніх збережених
+        // значень; нове місце — з «не вибрано».
         viewModelScope.launch {
-            val latest = runCatching { placeRepository.getPlaceById(placeId)?.checks }.getOrNull() ?: return@launch
-            _uiState.update { state ->
-                if (state.form.values.isEmpty()) state.copy(form = QuickCheckState.from(latest).copy(comment = state.form.comment)) else state
+            val place = runCatching { placeRepository.getPlaceById(placeId) }.getOrNull()
+            val form = when {
+                place == null -> QuickCheckState()
+                criteriaFor(place.category).kind == CriteriaKind.STOP -> QuickCheckState.forStop(place.stopCheck?.answers)
+                else -> QuickCheckState.from(place.checks)
             }
+            _uiState.update { state -> state.copy(form = form.copy(comment = state.form.comment), isLoadingPlace = false) }
         }
     }
 
@@ -72,15 +80,19 @@ class QuickCheckViewModel(
         }
         if (_uiState.value.isSubmitting) return
         val form = _uiState.value.form
-        val checkResult = form.toCheckResult() ?: run {
+        if (form.unanswered.isNotEmpty()) {
             val missing = form.unanswered.joinToString { it.title }
-            _uiState.update { it.copy(errorMessage = "Оцініть усі 7 критеріїв. Не вибрано: $missing") }
+            _uiState.update { it.copy(errorMessage = "Оцініть усі ${form.set.criteria.size} критеріїв. Не вибрано: $missing") }
             return
         }
+        val comment = form.comment.ifBlank { null }
         viewModelScope.launch {
             _uiState.update { it.copy(isSubmitting = true, errorMessage = null) }
             runCatching {
-                checkRepository.submitCheck(placeId, userId, checkResult, form.comment.ifBlank { null })
+                when (form.set.kind) {
+                    CriteriaKind.ENTRANCE -> checkRepository.submitCheck(placeId, userId, form.toCheckResult()!!, comment)
+                    CriteriaKind.STOP -> checkRepository.submitStopCheck(placeId, userId, form.toStopAnswers()!!, comment)
+                }
             }.onSuccess {
                 // Бали учня нараховує сервер — підтягуємо оновлений профіль, щоб «Профіль» показав їх одразу.
                 if (currentUserStore.user.value?.ageGroup == UserAgeGroup.STUDENT) {

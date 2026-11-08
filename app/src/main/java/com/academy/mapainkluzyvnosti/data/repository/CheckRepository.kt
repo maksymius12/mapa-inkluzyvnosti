@@ -2,6 +2,7 @@ package com.academy.mapainkluzyvnosti.data.repository
 
 import com.academy.mapainkluzyvnosti.data.model.CheckResult
 import com.academy.mapainkluzyvnosti.data.remote.SupabaseErrorLog
+import com.academy.mapainkluzyvnosti.data.remote.dto.CheckInsertDto
 import com.academy.mapainkluzyvnosti.data.remote.dto.toDto
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
@@ -28,6 +29,24 @@ class CheckRepository(private val client: SupabaseClient) {
                     "staff_assistance" to dto.staffAssistance, "accessible_parking" to dto.accessibleParking,
                     "comment_length" to (comment?.length ?: 0)
                 )
+            )
+            throw e
+        }
+    }
+
+    /**
+     * Перевірка зупинки за 9 критеріями (checks.criteria). Повноту відповідей і статус перевіряє/рахує сервер
+     * (тригери checks_before_insert_validate і checks_after_insert_apply, міграція 20261105130000).
+     */
+    suspend fun submitStopCheck(placeId: String, userId: String, answers: Map<String, Boolean>, comment: String?) {
+        val dto = CheckInsertDto(placeId = placeId, userId = userId, comment = comment, criteria = answers)
+        try {
+            client.postgrest.from("checks").insert(dto)
+        } catch (e: Exception) {
+            SupabaseErrorLog.log(
+                "POST /rest/v1/checks (stop)",
+                e,
+                mapOf("place_id" to placeId, "answers" to answers.size, "comment_length" to (comment?.length ?: 0))
             )
             throw e
         }

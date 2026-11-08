@@ -7,11 +7,14 @@ import com.academy.mapainkluzyvnosti.data.remote.dto.AnalyzePlacePhotoRequest
 import com.academy.mapainkluzyvnosti.data.remote.dto.AnalyzePlacePhotoResponse
 import com.academy.mapainkluzyvnosti.data.remote.dto.CheckDto
 import com.academy.mapainkluzyvnosti.data.remote.dto.toDomainCheckResult
+import com.academy.mapainkluzyvnosti.data.remote.dto.toStopCheck
+import com.academy.mapainkluzyvnosti.data.remote.dto.CHECK_READ_COLUMNS
 import com.academy.mapainkluzyvnosti.data.remote.dto.PlacePhotoDto
 import com.academy.mapainkluzyvnosti.data.remote.dto.PlaceReadDto
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.functions.functions
 import io.github.jan.supabase.postgrest.postgrest
+import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Order
 import io.github.jan.supabase.storage.storage
 import io.ktor.client.call.body
@@ -38,7 +41,7 @@ class PlaceRepository(private val client: SupabaseClient) {
 
     private suspend fun latestChecksByPlace(): Map<String, CheckDto> =
         client.postgrest.from("checks")
-            .select { order("created_at", Order.DESCENDING) }
+            .select(Columns.raw(CHECK_READ_COLUMNS)) { order("created_at", Order.DESCENDING) }
             .decodeList<CheckDto>()
             .groupBy { it.placeId }
             .mapValues { (_, checks) -> checks.first() }
@@ -103,7 +106,7 @@ class PlaceRepository(private val client: SupabaseClient) {
 
     private suspend fun latestCheckFor(placeId: String): CheckDto? =
         client.postgrest.from("checks")
-            .select {
+            .select(Columns.raw(CHECK_READ_COLUMNS)) {
                 filter { eq("place_id", placeId) }
                 order("created_at", Order.DESCENDING)
                 limit(1)
@@ -153,11 +156,11 @@ class PlaceRepository(private val client: SupabaseClient) {
      * AI-аналіз фото через Edge Function analyze-place-photo (OpenRouter на сервері; ключа в застосунку немає).
      * Помилку кидає далі — екран пропонує завантажити фото без аналізу.
      */
-    suspend fun analyzePhoto(photoUrl: String): AnalyzePlacePhotoResponse {
+    suspend fun analyzePhoto(photoUrl: String, category: String? = null): AnalyzePlacePhotoResponse {
         return try {
             client.functions.invoke(
                 function = "analyze-place-photo",
-                body = AnalyzePlacePhotoRequest(photoUrl)
+                body = AnalyzePlacePhotoRequest(photoUrl, category)
             ).body<AnalyzePlacePhotoResponse>()
         } catch (e: Exception) {
             SupabaseErrorLog.log("POST /functions/v1/analyze-place-photo", e)
@@ -174,6 +177,7 @@ class PlaceRepository(private val client: SupabaseClient) {
         lng = lng,
         status = status,
         checks = latestCheck?.toDomainCheckResult(),
+        stopCheck = latestCheck?.toStopCheck(),
         source = source,
         verifiedNote = verifiedNote,
         rating = rating,

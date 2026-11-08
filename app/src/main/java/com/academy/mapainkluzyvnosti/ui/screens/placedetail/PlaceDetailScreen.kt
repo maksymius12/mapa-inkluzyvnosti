@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.PlaylistAddCheck
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.WrongLocation
 import androidx.compose.material.icons.outlined.Accessible
 import androidx.compose.material.icons.outlined.Elevator
@@ -73,6 +74,10 @@ import com.academy.mapainkluzyvnosti.ui.components.OpenDataSourceNote
 import com.academy.mapainkluzyvnosti.ui.components.OpenDataTag
 import com.academy.mapainkluzyvnosti.ui.components.PrimaryButton
 import com.academy.mapainkluzyvnosti.ui.components.SecondaryButton
+import com.academy.mapainkluzyvnosti.ui.components.CriteriaCheckCard
+import com.academy.mapainkluzyvnosti.ui.components.CriteriaKind
+import com.academy.mapainkluzyvnosti.ui.components.StopCriteria
+import com.academy.mapainkluzyvnosti.ui.components.criteriaFor
 import com.academy.mapainkluzyvnosti.ui.components.StatusBadge
 import com.academy.mapainkluzyvnosti.ui.components.rememberPhotoPicker
 import com.academy.mapainkluzyvnosti.ui.components.visual
@@ -266,7 +271,7 @@ fun PlaceDetailScreen(
                             ) {
                                 CategoryChip(category = place.category, showIcon = false)
                                 StatusBadge(status = place.status)
-                                place.checks?.checkedAt?.let(::formatCheckDate)?.let { date ->
+                                (place.checks?.checkedAt ?: place.stopCheck?.checkedAt)?.let(::formatCheckDate)?.let { date ->
                                     Text(
                                         text = "Перевірено $date",
                                         style = MaterialTheme.typography.labelMedium,
@@ -298,14 +303,37 @@ fun PlaceDetailScreen(
                                 )
                             }
 
-                            AccessibilityTiles(place = place, modifier = Modifier.padding(top = 18.dp))
+                            // Видно одразу під адресою (раніше кнопка була лише в самому низу картки). Права — лише
+                            // волонтер / учень / адмін; сервер перевіряє те саме (set_place_hours, MP403 мешканцю).
+                            if (uiState.canEditHours) {
+                                SecondaryButton(
+                                    text = if (place.openingHours == null) "Додати графік роботи" else "Змінити графік",
+                                    icon = Icons.Filled.Schedule,
+                                    onClick = viewModel::openHoursEditor,
+                                    modifier = Modifier.padding(top = 12.dp)
+                                )
+                            }
 
-                            Text(
-                                text = "Додаткова інформація",
-                                style = MaterialTheme.typography.titleMedium,
-                                modifier = Modifier.padding(top = 24.dp, bottom = 4.dp)
-                            )
-                            AdditionalInfo(place = place)
+                            if (criteriaFor(place.category).kind == CriteriaKind.STOP) {
+                                // Зупинка: 9 власних критеріїв у тій самій картці, лише перегляд останньої перевірки.
+                                val answers = place.stopCheck?.answers
+                                CriteriaCheckCard(
+                                    set = StopCriteria,
+                                    title = if (answers == null) "Критерії зупинки · ще не перевірено" else "Критерії зупинки",
+                                    values = { answers?.get(it.key) },
+                                    onValueChange = null,
+                                    modifier = Modifier.padding(top = 18.dp)
+                                )
+                            } else {
+                                AccessibilityTiles(place = place, modifier = Modifier.padding(top = 18.dp))
+
+                                Text(
+                                    text = "Додаткова інформація",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    modifier = Modifier.padding(top = 24.dp, bottom = 4.dp)
+                                )
+                                AdditionalInfo(place = place)
+                            }
 
                             if (place.isOpenData) {
                                 OpenDataSourceNote(place = place, modifier = Modifier.padding(top = 12.dp))
@@ -368,7 +396,8 @@ fun PlaceDetailScreen(
 
                             OpeningHoursSection(
                                 hours = place.openingHours,
-                                canEdit = uiState.canEditHours,
+                                // Кнопка — під адресою, тут лише показ графіка.
+                                canEdit = false,
                                 onEdit = viewModel::openHoursEditor,
                                 modifier = Modifier.padding(bottom = 20.dp)
                             )

@@ -25,21 +25,16 @@ data class BottomNavEntry(
     val onClick: () -> Unit
 )
 
-/**
- * Нижня навігація: Мапа, Новини, [SOS], Обране, Профіль. Активний пункт синій, решта приглушені.
- * [onSos] — запит допомоги як окремий червоний пункт по центру панелі (доступний з усіх вкладок);
- * викликається після утримання кнопки ~1 с і одразу надсилає запит.
- */
+/** Нижня навігація: Мапа, Новини, Обране, Профіль. Активний пункт синій, решта приглушені. */
 @Composable
-fun MapaBottomNavBar(entries: List<BottomNavEntry>, modifier: Modifier = Modifier, onSos: (() -> Unit)? = null) {
+fun MapaBottomNavBar(entries: List<BottomNavEntry>, modifier: Modifier = Modifier) {
     Column(modifier = modifier.fillMaxWidth()) {
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         NavigationBar(
             containerColor = MaterialTheme.colorScheme.surface,
             tonalElevation = androidx.compose.ui.unit.Dp.Hairline
         ) {
-            entries.forEachIndexed { index, entry ->
-                if (onSos != null && index == entries.size / 2) SosNavItem(onHoldComplete = onSos)
+            entries.forEach { entry ->
                 NavigationBarItem(
                     selected = entry.selected,
                     onClick = entry.onClick,

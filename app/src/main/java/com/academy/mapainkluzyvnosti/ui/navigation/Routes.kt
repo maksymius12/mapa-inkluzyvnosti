@@ -28,7 +28,6 @@ object Routes {
     const val NEWS = "news"
     const val PROFILE = "profile"
     const val SETTINGS = "settings"
-    const val NOTIFICATIONS = "notifications"
     /** Заявки на нові локації: черга на розгляд (рецензент) або власні заявки (мешканець). */
     const val PLACE_REQUESTS = "place_requests"
     const val ADMIN_USERS = "admin_users"
@@ -40,7 +39,6 @@ object Routes {
 
     const val ROUTE_PLANNER_PATTERN = "route_planner/{placeId}"
     fun routePlanner(placeId: String) = "route_planner/$placeId"
-    const val SOS_REQUEST = "sos_request"
 
     const val PLACE_DETAIL_PATTERN = "place_detail/{placeId}"
     fun placeDetail(placeId: String) = "place_detail/$placeId"
