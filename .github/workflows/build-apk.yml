@@ -55,10 +55,51 @@ jobs:
           ./gradlew assembleDebug
 
       # Відбиток сертифіката (не секрет): має збігатися з локальною збіркою — тоді оновлення ставиться поверх.
+      # Крок падає лише коли APK не підписано, підпис не проходить перевірку або це стандартний debug-ключ.
       - name: Verify signature
+        shell: bash
         run: |
-          APKSIGNER="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)apksigner"
-          "$APKSIGNER" verify --print-certs app/build/outputs/apk/debug/app-debug.apk | grep -E "Signer #1 certificate (DN|SHA-256)"
+          set -u
+          APK=app/build/outputs/apk/debug/app-debug.apk
+
+          echo "== app/build/outputs/apk/"
+          ls -laR app/build/outputs/apk/ || echo "(каталогу немає)"
+
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -name apksigner -type f 2>/dev/null | sort -V | tail -1)"
+          if [ -z "$APKSIGNER" ]; then
+            echo "::error::apksigner не знайдено в $ANDROID_HOME/build-tools"; exit 1
+          fi
+          echo "== apksigner: $APKSIGNER"
+
+          if [ ! -f "$APK" ]; then
+            echo "::error::APK не знайдено: $APK"; exit 1
+          fi
+
+          # Повний вивід без фільтрів — там лише публічний сертифікат.
+          set +e
+          VERIFY_OUT="$("$APKSIGNER" verify --verbose --print-certs "$APK" 2>&1)"
+          VERIFY_RC=$?
+          set -e
+          echo "== apksigner verify (код $VERIFY_RC)"
+          echo "$VERIFY_OUT"
+
+          if [ "$VERIFY_RC" -ne 0 ]; then
+            echo "::error::apksigner verify завершився з кодом $VERIFY_RC: APK не підписано або підпис недійсний"; exit 1
+          fi
+
+          CERT_SHA256="$(echo "$VERIFY_OUT" | grep -i "certificate SHA-256 digest" | head -1 | sed 's/.*[Dd]igest:[[:space:]]*//' || true)"
+          CERT_DN="$(echo "$VERIFY_OUT" | grep -i "certificate DN" | head -1 | sed 's/.*DN:[[:space:]]*//' || true)"
+
+          if [ -z "$CERT_SHA256" ]; then
+            echo "::error::У виводі apksigner немає 'certificate SHA-256 digest' — сертифікат підписувача не знайдено"; exit 1
+          fi
+          # Стандартний debug-ключ означає, що наш keystore не підхопився (такий APK не стане поверх).
+          if echo "$CERT_DN" | grep -qi "CN=Android Debug"; then
+            echo "::error::APK підписано стандартним debug-ключем ($CERT_DN), а не ключем mapa"; exit 1
+          fi
+
+          echo "Сертифікат: $CERT_DN"
+          echo "SHA-256:    $CERT_SHA256"
 
       - name: Remove keystore
         if: always()
