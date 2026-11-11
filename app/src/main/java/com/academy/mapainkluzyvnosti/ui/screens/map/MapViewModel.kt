@@ -5,18 +5,24 @@ import androidx.lifecycle.viewModelScope
 import com.academy.mapainkluzyvnosti.data.model.AccessibilityType
 import com.academy.mapainkluzyvnosti.data.model.GeoPoint
 import com.academy.mapainkluzyvnosti.data.model.Place
+import com.academy.mapainkluzyvnosti.data.model.SosRequest
 import com.academy.mapainkluzyvnosti.data.remote.NominatimApi
 import com.academy.mapainkluzyvnosti.data.remote.toUserMessage
 import com.academy.mapainkluzyvnosti.data.repository.PlaceRepository
+import com.academy.mapainkluzyvnosti.data.repository.SosRepository
 import com.academy.mapainkluzyvnosti.domain.usecase.parseOuterRings
+import com.academy.mapainkluzyvnosti.ui.state.CurrentUserStore
 import com.academy.mapainkluzyvnosti.ui.state.FilterSelection
 import com.academy.mapainkluzyvnosti.ui.state.MapFilterStore
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -24,14 +30,19 @@ data class MapUiState(
     val places: List<Place> = emptyList(),
     val activeTypes: Set<AccessibilityType> = AccessibilityType.entries.toSet(),
     val selectedPlaceId: String? = null,
+    val sosRequests: List<SosRequest> = emptyList(),
+    val selectedSosId: String? = null,
     val isLoading: Boolean = true,
     val errorMessage: String? = null
 ) {
     val selectedPlace: Place? get() = places.firstOrNull { it.id == selectedPlaceId }
+    val selectedSos: SosRequest? get() = sosRequests.firstOrNull { it.id == selectedSosId }
 }
 
 class MapViewModel(
     private val placeRepository: PlaceRepository,
+    private val sosRepository: SosRepository,
+    private val currentUserStore: CurrentUserStore,
     private val filterStore: MapFilterStore,
     private val nominatimApi: NominatimApi
 ) : ViewModel() {
@@ -41,6 +52,11 @@ class MapViewModel(
     val uiState: StateFlow<MapUiState> = _uiState.asStateFlow()
 
     val filterSelection: StateFlow<FilterSelection> = filterStore.selection
+
+    /** SOS бачать і закривають волонтер, учень і адмін (як і RLS sos_requests). */
+    val isVolunteer: StateFlow<Boolean> = currentUserStore.user
+        .map { it?.isReviewer == true }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     // Межі району — для затемнення мапи поза ним і обмеження камери.
     private val _districtBoundary = MutableStateFlow<List<List<GeoPoint>>>(emptyList())
@@ -70,10 +86,11 @@ class MapViewModel(
         }
     }
 
-    /** Список місць не повинен переживати довше одного показу екрана — свіжий запит щоразу. */
+    /** Список місць і активних SOS не повинен переживати довше одного показу екрана — свіжий запит щоразу. */
     fun refresh() {
         if (_districtBoundary.value.isEmpty()) loadDistrictBoundary()
         loadPlaces()
+        loadSosRequests()
     }
 
     fun loadPlaces() {
@@ -95,16 +112,41 @@ class MapViewModel(
     /** Щойно додане користувачем місце — одразу на мапі й вибране, не чекаючи наступного оновлення. */
     fun onPlaceAdded(place: Place) {
         allPlaces.update { places -> places.filterNot { it.id == place.id } + place }
-        _uiState.update { it.copy(selectedPlaceId = place.id) }
+        _uiState.update { it.copy(selectedPlaceId = place.id, selectedSosId = null) }
+    }
+
+    fun loadSosRequests() {
+        viewModelScope.launch {
+            runCatching { sosRepository.getOpenRequests() }
+                .onSuccess { requests -> _uiState.update { it.copy(sosRequests = requests) } }
+        }
     }
 
     fun selectTypeChip(type: AccessibilityType?) = filterStore.selectTypeChip(type)
 
     fun selectPlace(placeId: String) {
-        _uiState.update { it.copy(selectedPlaceId = placeId) }
+        _uiState.update { it.copy(selectedPlaceId = placeId, selectedSosId = null) }
+    }
+
+    fun selectSos(sosId: String) {
+        _uiState.update { it.copy(selectedSosId = sosId, selectedPlaceId = null) }
     }
 
     fun clearSelection() {
-        _uiState.update { it.copy(selectedPlaceId = null) }
+        _uiState.update { it.copy(selectedPlaceId = null, selectedSosId = null) }
+    }
+
+    fun resolveSelectedSos() {
+        val sos = _uiState.value.selectedSos ?: return
+        viewModelScope.launch {
+            runCatching { sosRepository.resolve(sos.id) }
+                .onSuccess {
+                    _uiState.update { it.copy(selectedSosId = null) }
+                    loadSosRequests()
+                }
+                .onFailure { e ->
+                    _uiState.update { it.copy(errorMessage = e.toUserMessage("Не вдалося позначити запит допомоги виконаним")) }
+                }
+        }
     }
 }

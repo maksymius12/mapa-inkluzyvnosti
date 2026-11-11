@@ -16,10 +16,13 @@ import com.academy.mapainkluzyvnosti.data.repository.AdminRepository
 import com.academy.mapainkluzyvnosti.data.repository.ExistenceReportRepository
 import com.academy.mapainkluzyvnosti.data.repository.NameSuggestionRepository
 import com.academy.mapainkluzyvnosti.data.repository.NewsRepository
+import com.academy.mapainkluzyvnosti.data.repository.ChatRepository
 import com.academy.mapainkluzyvnosti.data.repository.ContributionRepository
 import com.academy.mapainkluzyvnosti.ui.screens.news.NewsViewModel
+import com.academy.mapainkluzyvnosti.ui.screens.chat.ChatViewModel
 import com.academy.mapainkluzyvnosti.data.repository.PlaceRequestRepository
 import com.academy.mapainkluzyvnosti.data.repository.ReviewRepository
+import com.academy.mapainkluzyvnosti.data.repository.SosRepository
 import com.academy.mapainkluzyvnosti.data.repository.UserPlaceRepository
 import com.academy.mapainkluzyvnosti.domain.usecase.BuildRoute
 import com.academy.mapainkluzyvnosti.ui.screens.favorites.FavoritesViewModel
@@ -37,17 +40,21 @@ import com.academy.mapainkluzyvnosti.ui.screens.admin.AdminStatsViewModel
 import com.academy.mapainkluzyvnosti.ui.screens.admin.AdminUsersViewModel
 import com.academy.mapainkluzyvnosti.ui.screens.requests.PlaceRequestsViewModel
 import com.academy.mapainkluzyvnosti.ui.screens.placedetail.PlaceDetailViewModel
+import com.academy.mapainkluzyvnosti.ui.screens.notifications.NotificationsViewModel
 import com.academy.mapainkluzyvnosti.ui.screens.profile.ProfileViewModel
 import com.academy.mapainkluzyvnosti.ui.screens.settings.SettingsViewModel
 import com.academy.mapainkluzyvnosti.ui.screens.quickcheck.QuickCheckViewModel
 import com.academy.mapainkluzyvnosti.ui.screens.route.RouteViewModel
 import com.academy.mapainkluzyvnosti.ui.screens.search.SearchViewModel
+import com.academy.mapainkluzyvnosti.ui.screens.sos.SosRequestViewModel
 import com.academy.mapainkluzyvnosti.ui.state.AppStartup
 import com.academy.mapainkluzyvnosti.ui.state.CurrentUserStore
 import com.academy.mapainkluzyvnosti.ui.state.DemoModeStore
 import com.academy.mapainkluzyvnosti.ui.state.FavoriteRoutesStore
 import com.academy.mapainkluzyvnosti.ui.state.MapFilterStore
 import com.academy.mapainkluzyvnosti.ui.state.ModerationCountsStore
+import com.academy.mapainkluzyvnosti.ui.state.SosController
+import com.academy.mapainkluzyvnosti.notifications.SosAlertWatcher
 import com.academy.mapainkluzyvnosti.ui.state.SettingsStore
 import com.academy.mapainkluzyvnosti.ui.state.ThemeStore
 import com.academy.mapainkluzyvnosti.ui.state.SessionSync
@@ -80,12 +87,14 @@ val repositoryModule = module {
     single { CheckRepository(get()) }
     single { AuthRepository(get()) }
     single { FavoriteRepository(get()) }
+    single { SosRepository(get()) }
     single { UserPlaceRepository(get(), get()) }
     single { PlaceRequestRepository(get()) }
     single { ReviewRepository(get()) }
     single { AdminRepository(get()) }
     single { ExistenceReportRepository(get()) }
     single { NameSuggestionRepository(get()) }
+    single { ChatRepository(get()) }
     single { NewsRepository(get()) }
     single { ContributionRepository(get()) }
 }
@@ -109,6 +118,8 @@ val stateModule = module {
     single { TutorialCoordinator(get(), get(), get(), get()) }
     single { SessionSync(get(), get(), get()) }
     single { ModerationCountsStore(get(), get(), get(), get(), get(named(APP_SCOPE))) }
+    single { SosController(get(), get(), get(), get(), get(), get(), get(named(APP_SCOPE))) }
+    single { SosAlertWatcher(get(), get(), get(), get(), get(), get(), get(named(APP_SCOPE))) }
 }
 
 val viewModelModule = module {
@@ -118,7 +129,7 @@ val viewModelModule = module {
         OtpViewModel(purpose, email, sendCode, get(), get(), get())
     }
     viewModel { RoleSetupViewModel(get(), get()) }
-    viewModel { MapViewModel(get(), get(), get()) }
+    viewModel { MapViewModel(get(), get(), get(), get(), get()) }
     viewModel { AddPlaceViewModel(get(), get(), get(), get(), get()) }
     viewModel { PlaceRequestsViewModel(get(), get(), get(), get()) }
     viewModel { AdminUsersViewModel(get(), get()) }
@@ -133,7 +144,10 @@ val viewModelModule = module {
     viewModel { FavoritesViewModel(get(), get(), get(), get()) }
     viewModel { ProfileViewModel(get(), get(), get(), get(), get()) }
     viewModel { SettingsViewModel(get(), get(), get(), get(), get()) }
+    viewModel { NotificationsViewModel(get()) }
     viewModel { NewsViewModel(get(), get(), get()) }
+    viewModel { SosRequestViewModel(get(), get(), get()) }
+    viewModel { ChatViewModel(get(), get(), get()) }
 }
 
 val appModules = listOf(networkModule, repositoryModule, useCaseModule, stateModule, viewModelModule)

@@ -8,8 +8,7 @@ import android.os.Build
 object AppNotifications {
 
     const val ROUTE_BARRIER_CHANNEL_ID = "route_barriers"
-    /** Канал прибраної функції SOS: видаляється на пристроях, оновлених зі старої збірки. */
-    private const val LEGACY_SOS_CHANNEL_ID = "sos_alerts"
+    const val SOS_CHANNEL_ID = "sos_alerts"
 
     fun createChannels(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
@@ -23,6 +22,12 @@ object AppNotifications {
             ).apply { description = "Сповіщення про нові бар'єри на збережених маршрутах" }
         )
 
-        manager.deleteNotificationChannel(LEGACY_SOS_CHANNEL_ID)
+        manager.createNotificationChannel(
+            NotificationChannel(
+                SOS_CHANNEL_ID,
+                "SOS-запити волонтерам",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply { description = "Запити про допомогу поруч від інших користувачів" }
+        )
     }
 }

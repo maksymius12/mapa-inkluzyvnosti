@@ -29,6 +29,7 @@ Android-застосунок, який показує, куди людина з 
 | Хто може перевіряти | Будь-хто | Лише фахівець | Будь-хто, до 1 хвилини |
 | Маршрут із бар'єрами | немає | немає | є |
 | Аналіз фото ШІ | немає | немає | є |
+| Запит допомоги | немає | немає | є |
 
 ## Як це працює
 
@@ -67,6 +68,7 @@ Android-застосунок, який показує, куди людина з 
 - **Маршрути з бар'єрами.** Застосунок не лише показує точки, а веде шляхом і попереджає про перешкоди.
 - **Ранкова перевірка маршрутів.** Щодня о 7:00 збережені маршрути перевіряються заново, а користувач отримує сповіщення, якщо з'явилась нова перешкода.
 - **Аналіз фото штучним інтелектом.** Фото входу аналізується моделлю, яка пропонує покращення. ШІ може лише знизити статус закладу, але ніколи не підвищити.
+- **Запит допомоги.** Сигнал волонтерам поруч. Це не екстрена служба і не заміна 112.
 - **Ролі користувачів.** Мешканець або волонтер, а також різні можливості для учнів і дорослих.
 - **Обране, пошук, налаштування теми.**
 
@@ -122,10 +124,10 @@ Remove-Item Env:SUPABASE_SERVICE_ROLE_KEY
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File tools\backup\backup-db.ps1 -Tables `
-  app_config,checks,criteria_definitions,device_tokens,district_boundary,favorites,news_posts,place_existence_reports,place_name_suggestions,place_photos,place_reports,place_request_reviews,place_requests,place_reviews,places,profiles,reviews,sos_requests
+  app_config,chat_messages,checks,criteria_definitions,device_tokens,district_boundary,favorites,news_posts,place_existence_reports,place_name_suggestions,place_photos,place_reports,place_request_reviews,place_requests,place_reviews,places,profiles,reviews,sos_requests
 ```
 
-  Це всі таблиці даних у `public` станом на 11.11.2026 (17 + `app_config` після міграції `20261111120000`; до її застосування `app_config` приберіть зі списку, інакше скрипт позначить її помилкою). Нову таблицю — додавати сюди. Без схеми рядки читаються в порядку `id`; таблиці без `id` (`criteria_definitions`, `device_tokens`, `place_request_reviews`) читаються однією сторінкою.
+  Це всі таблиці даних у `public` станом на 11.11.2026 (17 + `app_config` і `chat_messages` після міграцій `20261111120000` і `20261111130000`; до їх застосування приберіть ці таблиці зі списку, інакше скрипт позначить їх помилкою). Нову таблицю — додавати сюди. Без схеми рядки читаються в порядку `id`; таблиці без `id` (`criteria_definitions`, `device_tokens`, `place_request_reviews`) читаються однією сторінкою.
 - Копія лягає в `%USERPROFILE%\MapaBackups\<дата_час>\` (інша папка: `-OutRoot D:\MapaBackups`; всередині репозиторію скрипт писати відмовиться).
 - Кожна таблиця `public` окремим JSON, плюс `manifest.json` і `counts.txt` з кількістю рядків. Кількість звіряється з сервером; якщо щось не збіглося, скрипт пише «копія НЕПОВНА» і завершується з кодом 1.
 - Ключ у файли не потрапляє. Не копіюються фото зі Storage і `auth.users`.
@@ -147,6 +149,7 @@ powershell -ExecutionPolicy Bypass -File tools\backup\backup-db.ps1 -Tables `
 - [x] Швидка перевірка за 7 критеріями
 - [x] Маршрути з підсвіченими бар'єрами
 - [x] Аналіз фото ШІ
+- [x] Запит допомоги та push-сповіщення
 - [ ] Вхід через email і пароль, відновлення пароля
 - [ ] Демо-режим для гостя
 - [ ] 3D-карта з об'ємними будівлями (MapLibre)

@@ -85,3 +85,21 @@ enum class PlaceRequestStatus {
     @SerialName("approved") APPROVED,
     @SerialName("rejected") REJECTED
 }
+
+/** Що сталося. Перші чотири — швидкі варіанти на екрані «Запит надіслано»; OBSTACLE і PHYSICAL_HELP — зі старих запитів. */
+@Serializable
+enum class SosProblemType {
+    @SerialName("cant_enter") CANT_ENTER,
+    @SerialName("stuck") STUCK,
+    @SerialName("escort") ESCORT,
+    @SerialName("other") OTHER,
+    @SerialName("obstacle") OBSTACLE,
+    @SerialName("physical_help") PHYSICAL_HELP
+}
+
+@Serializable
+enum class SosStatus {
+    @SerialName("open") OPEN,
+    @SerialName("resolved") RESOLVED,
+    @SerialName("cancelled") CANCELLED
+}

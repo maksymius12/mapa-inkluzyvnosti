@@ -29,8 +29,8 @@ android {
         targetSdk = 37
         // Піднімати versionCode у КОЖНОМУ релізі: з ним порівнюється app_config.min_version_code (CLAUDE.md).
         // 3 — перша збірка з примусовим оновленням.
-        versionCode = 3
-        versionName = "1.1.1"
+        versionCode = 5
+        versionName = "1.2.0"
 
         buildConfigField("String", "SUPABASE_URL", "\"${localProperties.getProperty("SUPABASE_URL", "")}\"")
         buildConfigField("String", "SUPABASE_ANON_KEY", "\"${localProperties.getProperty("SUPABASE_ANON_KEY", "")}\"")

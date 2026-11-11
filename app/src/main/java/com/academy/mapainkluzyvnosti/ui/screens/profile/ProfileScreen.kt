@@ -17,14 +17,16 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
+import androidx.compose.material.icons.outlined.Sos
 import androidx.compose.material.icons.automirrored.outlined.Assignment
+import androidx.compose.material.icons.automirrored.outlined.Chat
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.AdminPanelSettings
-import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.outlined.HelpOutline
 import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.Route
+import androidx.compose.material.icons.outlined.NotificationsNone
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
@@ -63,9 +65,10 @@ import org.koin.compose.viewmodel.koinViewModel
 /** Екран 7: профіль. Аватар, ім'я з реального профілю, список розділів. */
 @Composable
 fun ProfileScreen(
-    onOpenRoutes: () -> Unit,
-    onOpenFavorites: () -> Unit,
+    onOpenChat: () -> Unit,
+    onOpenNotifications: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenHelp: () -> Unit,
     onOpenTutorial: () -> Unit,
     onOpenPlaceRequests: () -> Unit,
     onOpenAdmin: () -> Unit,
@@ -86,6 +89,7 @@ fun ProfileScreen(
     }
     val isDemoMode by viewModel.isDemoMode.collectAsState()
     var showAbout by remember { mutableStateOf(false) }
+    var showHelp by remember { mutableStateOf(false) }
 
     val name = if (isDemoMode) "Гостьовий перегляд" else viewModel.displayName(user)
     // Мета й вікова категорія — з profiles (або підставлені, поки рядка немає).
@@ -125,7 +129,7 @@ fun ProfileScreen(
 
         if (isDemoMode) {
             Text(
-                text = "Дані доступні лише для перегляду. Увійди через Google, щоб додавати перевірки, фото й обране.",
+                text = "Дані доступні лише для перегляду. Увійди через Google, щоб додавати перевірки, фото, обране та SOS і писати в чат.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 16.dp)
@@ -154,8 +158,9 @@ fun ProfileScreen(
         }
 
         Column(modifier = Modifier.padding(top = 24.dp)) {
-            MenuRow(Icons.Outlined.Route, "Мої маршрути", onOpenRoutes)
-            MenuRow(Icons.Outlined.FavoriteBorder, "Обране", onOpenFavorites)
+            // «Обране» й «Мої маршрути» — у вкладці «Обране» нижньої панелі; тут лише спільний чат.
+            MenuRow(Icons.AutoMirrored.Outlined.Chat, "Чат", onOpenChat)
+            MenuRow(Icons.Outlined.NotificationsNone, "Повідомлення", onOpenNotifications)
             if (!isDemoMode) {
                 MenuRow(
                     Icons.AutoMirrored.Outlined.Assignment,
@@ -169,8 +174,7 @@ fun ProfileScreen(
                 MenuRow(Icons.Outlined.AdminPanelSettings, "Адмін-панель · Видалені місця", onOpenAdmin, badge = counts.existenceReports)
             }
             MenuRow(Icons.Outlined.Settings, "Налаштування", onOpenSettings)
-            // Без SOS у «Допомозі» лишався один пункт — тож інструктаж відкривається одразу.
-            MenuRow(Icons.AutoMirrored.Outlined.MenuBook, "Як користуватися", onOpenTutorial)
+            MenuRow(Icons.Outlined.HelpOutline, "Допомога", { showHelp = true })
             MenuRow(Icons.Outlined.Info, "Про застосунок", { showAbout = true }, showDivider = false)
         }
 
@@ -179,6 +183,26 @@ fun ProfileScreen(
             icon = Icons.AutoMirrored.Filled.Logout,
             onClick = { viewModel.signOut(onSignedOut) },
             modifier = Modifier.padding(top = 24.dp)
+        )
+    }
+
+    if (showHelp) {
+        AlertDialog(
+            onDismissRequest = { showHelp = false },
+            title = { Text("Допомога") },
+            text = {
+                Column {
+                    MenuRow(Icons.AutoMirrored.Outlined.MenuBook, "Як користуватися", {
+                        showHelp = false
+                        onOpenTutorial()
+                    })
+                    MenuRow(Icons.Outlined.Sos, "Запит допомоги волонтерам", {
+                        showHelp = false
+                        onOpenHelp()
+                    }, showDivider = false)
+                }
+            },
+            confirmButton = { TextButton(onClick = { showHelp = false }) { Text("Закрити") } }
         )
     }
 

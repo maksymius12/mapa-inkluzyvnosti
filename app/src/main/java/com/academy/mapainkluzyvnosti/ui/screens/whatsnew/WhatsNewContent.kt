@@ -1,6 +1,9 @@
 package com.academy.mapainkluzyvnosti.ui.screens.whatsnew
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Sos
 import androidx.compose.material.icons.automirrored.filled.PlaylistAddCheck
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.MyLocation
@@ -19,6 +22,27 @@ data class WhatsNewRelease(val versionCode: Int, val versionName: String, val it
  * з тим самим versionCode, що й у збірці. Пунктів — 5–6 найважливіших, мовою користувача.
  */
 val whatsNewReleases: List<WhatsNewRelease> = listOf(
+    WhatsNewRelease(
+        versionCode = 5,
+        versionName = "1.2.0",
+        items = listOf(
+            WhatsNewItem(
+                Icons.AutoMirrored.Filled.Chat,
+                "Спільний чат",
+                "Профіль → «Чат»: одна розмова для всіх, хто увійшов. Лише текст, до 500 символів."
+            ),
+            WhatsNewItem(
+                Icons.Filled.Sos,
+                "SOS повернувся",
+                "Червона кнопка по центру нижньої панелі: утримайте її, і запит допомоги одразу піде волонтерам."
+            ),
+            WhatsNewItem(
+                Icons.Filled.Favorite,
+                "Обране й маршрути",
+                "Тепер лише у вкладці «Обране» внизу екрана. З профілю ці пункти прибрано."
+            )
+        )
+    ),
     WhatsNewRelease(
         versionCode = 2,
         versionName = "1.1.0",

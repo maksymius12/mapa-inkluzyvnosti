@@ -63,6 +63,7 @@ import com.academy.mapainkluzyvnosti.domain.usecase.FindBarriersOnRoute
 import com.academy.mapainkluzyvnosti.ui.components.MapaCard
 import com.academy.mapainkluzyvnosti.ui.components.PrimaryButton
 import com.academy.mapainkluzyvnosti.ui.components.ScreenHeader
+import com.academy.mapainkluzyvnosti.ui.components.SosHelpButton
 import com.academy.mapainkluzyvnosti.ui.components.formatDistanceKm
 import com.academy.mapainkluzyvnosti.ui.components.formatDurationMinutes
 import com.academy.mapainkluzyvnosti.ui.components.renderRoutePointDrawable
@@ -117,6 +118,7 @@ private val RouteEndColor = Color(0xFFFF4D7D)
 fun RouteScreen(
     destinationPlaceId: String,
     onBack: () -> Unit,
+    onOpenSos: () -> Unit,
     viewModel: RouteViewModel = koinViewModel(parameters = { parametersOf(destinationPlaceId) })
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -307,6 +309,11 @@ fun RouteScreen(
                     )
                 }
             }
+
+            SosHelpButton(
+                onHoldComplete = onOpenSos,
+                modifier = Modifier.align(Alignment.BottomStart).padding(16.dp)
+            )
         }
 
         RoutePanel(

@@ -81,6 +81,13 @@ fun SettingsScreen(
             SectionTitle("Сповіщення")
             MapaCard(modifier = Modifier.fillMaxWidth()) {
                 SwitchRow(
+                    title = "SOS-запити поблизу",
+                    subtitle = "Сповіщення про нові запити про допомогу",
+                    checked = settings.sosNotificationsEnabled,
+                    onCheckedChange = viewModel::setSosNotifications
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                SwitchRow(
                     title = "Оновлення збережених маршрутів",
                     subtitle = "Якщо на маршруті з'явилась нова перешкода",
                     checked = settings.routeNotificationsEnabled,

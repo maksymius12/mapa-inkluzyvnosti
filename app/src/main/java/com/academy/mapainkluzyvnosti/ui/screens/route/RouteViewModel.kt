@@ -46,7 +46,7 @@ class RouteViewModel(
     val favoriteRoutes: StateFlow<List<Route>> = favoriteRoutesStore.routes
 
     // Межі району — для затемнення карти поза ним. Не залежать від живих даних
-    // (places), тож достатньо один раз за час життя екрана.
+    // (places/SOS), тож достатньо один раз за час життя екрана.
     private val _districtBoundary = MutableStateFlow<List<List<GeoPoint>>>(emptyList())
     val districtBoundary: StateFlow<List<List<GeoPoint>>> = _districtBoundary.asStateFlow()
 

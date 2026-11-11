@@ -5,6 +5,7 @@ import com.academy.mapainkluzyvnosti.data.local.SavedRoutesStorage
 import com.academy.mapainkluzyvnosti.data.local.SettingsPreferences
 import com.academy.mapainkluzyvnosti.di.appModules
 import com.academy.mapainkluzyvnosti.notifications.AppNotifications
+import com.academy.mapainkluzyvnosti.notifications.SosAlertWatcher
 import com.academy.mapainkluzyvnosti.ui.state.ModerationCountsStore
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
@@ -31,8 +32,8 @@ class MapaApplication : Application() {
         MapLibre.getInstance(this)
         // Свіже встановлення одразу записує версію; оновлення — позначає екран «Що нового» до показу.
         GlobalContext.get().get<WhatsNewStore>().checkOnLaunch()
-        SettingsPreferences.clearLegacySos(this)
         AppNotifications.createChannels(this)
+        GlobalContext.get().get<SosAlertWatcher>().start()
         // Повернулися в застосунок — свіжі лічильники «чекає розгляду» (бейджі в профілі).
         val moderationCounts = GlobalContext.get().get<ModerationCountsStore>()
         ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
