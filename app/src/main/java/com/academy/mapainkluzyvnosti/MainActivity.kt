@@ -22,6 +22,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
 import com.academy.mapainkluzyvnosti.ui.components.NetworkAwareContent
+import com.academy.mapainkluzyvnosti.ui.components.UpdateGate
 import com.academy.mapainkluzyvnosti.ui.navigation.MapaNavHost
 import com.academy.mapainkluzyvnosti.ui.state.AppStartup
 import com.academy.mapainkluzyvnosti.ui.state.SettingsStore
@@ -65,18 +66,19 @@ class MainActivity : ComponentActivity() {
             var startRoute by remember { mutableStateOf<String?>(null) }
             LaunchedEffect(Unit) { startRoute = startup.resolveStartRoute() }
 
+            val startBackground = if (isDarkTheme) ComposeColor(Background.value) else ComposeColor(LightBackground.value)
             MapaInkluzyvnostiTheme(darkTheme = isDarkTheme, largeText = settings.isLargeText) {
-                // «Ви не в мережі» — поверх усієї навігації, включно з екранами входу.
-                NetworkAwareContent {
-                    val route = startRoute
-                    if (route == null) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(if (isDarkTheme) ComposeColor(Background.value) else ComposeColor(LightBackground.value))
-                        )
-                    } else {
-                        MapaNavHost(startRoute = route)
+                // Примусове оновлення — найзовнішній шар: застаріла збірка не відкриває жодного екрана.
+                // НЕ ПРИБИРАТИ й не переносити глибше (контракт у CLAUDE.md).
+                UpdateGate(background = startBackground) {
+                    // «Ви не в мережі» — поверх усієї навігації, включно з екранами входу.
+                    NetworkAwareContent {
+                        val route = startRoute
+                        if (route == null) {
+                            Box(modifier = Modifier.fillMaxSize().background(startBackground))
+                        } else {
+                            MapaNavHost(startRoute = route)
+                        }
                     }
                 }
             }

@@ -12,6 +12,13 @@ val localProperties = Properties().apply {
     if (file.exists()) file.inputStream().use { load(it) }
 }
 
+// Єдиний підпис усіх збірок (CLAUDE.md §3, docs/signing.md): у CI — змінні середовища, локально — local.properties.
+// Без keystore збірка все одно збирається (стандартний debug-ключ), але такий APK не ставиться поверх підписаного.
+fun signingValue(name: String): String? =
+    (System.getenv(name) ?: localProperties.getProperty(name))?.takeIf { it.isNotBlank() }
+
+val mapaKeystore: File? = signingValue("MAPA_KEYSTORE_FILE")?.let { File(it) }?.takeIf { it.isFile }
+
 android {
     namespace = "com.academy.mapainkluzyvnosti"
     compileSdk = 37
@@ -20,21 +27,37 @@ android {
         applicationId = "com.academy.mapainkluzyvnosti"
         minSdk = 26
         targetSdk = 37
-        versionCode = 2
-        versionName = "1.1.0"
+        // Піднімати versionCode у КОЖНОМУ релізі: з ним порівнюється app_config.min_version_code (CLAUDE.md).
+        // 3 — перша збірка з примусовим оновленням.
+        versionCode = 3
+        versionName = "1.1.1"
 
         buildConfigField("String", "SUPABASE_URL", "\"${localProperties.getProperty("SUPABASE_URL", "")}\"")
         buildConfigField("String", "SUPABASE_ANON_KEY", "\"${localProperties.getProperty("SUPABASE_ANON_KEY", "")}\"")
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"${localProperties.getProperty("GOOGLE_WEB_CLIENT_ID", "")}\"")
     }
 
+    signingConfigs {
+        if (mapaKeystore != null) {
+            create("mapa") {
+                storeFile = mapaKeystore
+                storePassword = signingValue("MAPA_KEYSTORE_PASSWORD")
+                keyAlias = signingValue("MAPA_KEY_ALIAS")
+                keyPassword = signingValue("MAPA_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfigs.findByName("mapa")?.let { signingConfig = it }
         }
         debug {
             isMinifyEnabled = false
+            // Той самий ключ, що й у CI: debug-збірка з Android Studio ставиться поверх APK з GitHub і навпаки.
+            signingConfigs.findByName("mapa")?.let { signingConfig = it }
         }
     }
 

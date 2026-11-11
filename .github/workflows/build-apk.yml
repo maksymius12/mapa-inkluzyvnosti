@@ -16,16 +16,53 @@ jobs:
           distribution: temurin
           java-version: 17
 
+      # Секрети передаємо через env, а не підставляємо прямо в скрипт.
       - name: Create local.properties
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_WEB_CLIENT_ID }}
         run: |
-          echo "SUPABASE_URL=${{ secrets.SUPABASE_URL }}" >> local.properties
-          echo "SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}" >> local.properties
-          echo "GOOGLE_WEB_CLIENT_ID=${{ secrets.GOOGLE_WEB_CLIENT_ID }}" >> local.properties
+          for name in SUPABASE_URL SUPABASE_ANON_KEY GOOGLE_WEB_CLIENT_ID; do
+            if [ -z "${!name}" ]; then echo "::error::Секрет $name не задано"; exit 1; fi
+          done
+          {
+            echo "SUPABASE_URL=$SUPABASE_URL"
+            echo "SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY"
+            echo "GOOGLE_WEB_CLIENT_ID=$GOOGLE_WEB_CLIENT_ID"
+          } > local.properties
+
+      # Єдиний ключ підпису (docs/signing.md). Без нього збірку зупиняємо: APK із випадковим ключем
+      # раннера не ставиться поверх уже встановленого застосунку.
+      - name: Restore signing keystore
+        env:
+          MAPA_KEYSTORE_BASE64: ${{ secrets.MAPA_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$MAPA_KEYSTORE_BASE64" ]; then echo "::error::Секрет MAPA_KEYSTORE_BASE64 не задано (docs/signing.md)"; exit 1; fi
+          echo "$MAPA_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/mapa-release.jks"
+          echo "MAPA_KEYSTORE_FILE=$RUNNER_TEMP/mapa-release.jks" >> "$GITHUB_ENV"
 
       - name: Build debug APK
+        env:
+          MAPA_KEYSTORE_PASSWORD: ${{ secrets.MAPA_KEYSTORE_PASSWORD }}
+          MAPA_KEY_ALIAS: ${{ secrets.MAPA_KEY_ALIAS }}
+          MAPA_KEY_PASSWORD: ${{ secrets.MAPA_KEY_PASSWORD }}
         run: |
+          for name in MAPA_KEYSTORE_PASSWORD MAPA_KEY_ALIAS MAPA_KEY_PASSWORD; do
+            if [ -z "${!name}" ]; then echo "::error::Секрет $name не задано (docs/signing.md)"; exit 1; fi
+          done
           chmod +x gradlew
           ./gradlew assembleDebug
+
+      # Відбиток сертифіката (не секрет): має збігатися з локальною збіркою — тоді оновлення ставиться поверх.
+      - name: Verify signature
+        run: |
+          APKSIGNER="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)apksigner"
+          "$APKSIGNER" verify --print-certs app/build/outputs/apk/debug/app-debug.apk | grep -E "Signer #1 certificate (DN|SHA-256)"
+
+      - name: Remove keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/mapa-release.jks" local.properties
 
       - uses: actions/upload-artifact@v4
         with:

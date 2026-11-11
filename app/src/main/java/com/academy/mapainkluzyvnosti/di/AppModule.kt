@@ -2,6 +2,8 @@ package com.academy.mapainkluzyvnosti.di
 
 import com.academy.mapainkluzyvnosti.data.local.LocationProvider
 import com.academy.mapainkluzyvnosti.data.local.NetworkMonitor
+import com.academy.mapainkluzyvnosti.BuildConfig
+import com.academy.mapainkluzyvnosti.data.remote.AppVersionChecker
 import com.academy.mapainkluzyvnosti.data.remote.NominatimApi
 import com.academy.mapainkluzyvnosti.data.remote.OsrmApi
 import com.academy.mapainkluzyvnosti.data.remote.createMapaSupabaseClient
@@ -64,6 +66,8 @@ private const val APP_SCOPE = "appScope"
 
 val networkModule = module {
     single { createMapaSupabaseClient() }
+    // Примусове оновлення — окремо від supabase-kt (див. AppVersionGate.kt і CLAUDE.md).
+    single { AppVersionChecker(BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY, BuildConfig.VERSION_CODE) }
     single { createOsmHttpClient() }
     single { NominatimApi(get()) }
     single { OsrmApi(get()) }

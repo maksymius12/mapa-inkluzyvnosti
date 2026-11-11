@@ -104,6 +104,33 @@ GOOGLE_WEB_CLIENT_ID=YOUR-WEB-CLIENT-ID.apps.googleusercontent.com
 3. Для push-сповіщень додай свій `google-services.json` у папку `app/`.
 4. Запусти застосунок на емуляторі або пристрої.
 
+Підпис збірок (один ключ для CI і локальних збірок) — [docs/signing.md](docs/signing.md).
+Правила для міграцій і примусового оновлення — [CLAUDE.md](CLAUDE.md).
+
+## Резервні копії бази
+
+**Коли:** перед кожною міграцією і щонайменше раз на тиждень.
+
+```powershell
+$env:SUPABASE_SERVICE_ROLE_KEY = '<service_role або sb_secret_… ключ>'   # лише для цієї сесії
+powershell -ExecutionPolicy Bypass -File tools\backup\backup-db.ps1
+Remove-Item Env:SUPABASE_SERVICE_ROLE_KEY
+```
+
+- Ключ `sb_secret_…` або `sb_publishable_…` скрипт передає лише в заголовку `apikey`; старий JWT (`eyJ…`) — ще й як `Authorization: Bearer`. Запити йдуть із `User-Agent: mapa-backup/1.0`: стандартний «Mozilla/5.0» від PowerShell Supabase сприймає як браузер і відхиляє `sb_secret_` («Forbidden use of secret API key in browser»).
+- Список таблиць скрипт бере зі схеми API (`GET /rest/v1/`). Якщо схема для ключа недоступна, він зупиниться з підказкою — тоді передайте таблиці явно:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\backup\backup-db.ps1 -Tables `
+  app_config,checks,criteria_definitions,device_tokens,district_boundary,favorites,news_posts,place_existence_reports,place_name_suggestions,place_photos,place_reports,place_request_reviews,place_requests,place_reviews,places,profiles,reviews,sos_requests
+```
+
+  Це всі таблиці даних у `public` станом на 11.11.2026 (17 + `app_config` після міграції `20261111120000`; до її застосування `app_config` приберіть зі списку, інакше скрипт позначить її помилкою). Нову таблицю — додавати сюди. Без схеми рядки читаються в порядку `id`; таблиці без `id` (`criteria_definitions`, `device_tokens`, `place_request_reviews`) читаються однією сторінкою.
+- Копія лягає в `%USERPROFILE%\MapaBackups\<дата_час>\` (інша папка: `-OutRoot D:\MapaBackups`; всередині репозиторію скрипт писати відмовиться).
+- Кожна таблиця `public` окремим JSON, плюс `manifest.json` і `counts.txt` з кількістю рядків. Кількість звіряється з сервером; якщо щось не збіглося, скрипт пише «копія НЕПОВНА» і завершується з кодом 1.
+- Ключ у файли не потрапляє. Не копіюються фото зі Storage і `auth.users`.
+- Копії **не комітити й не завантажувати як GitHub-артефакти**: там є дані користувачів.
+
 ## Джерела даних
 
 | Джерело | Що беремо | Ліцензія | Завантажено |
